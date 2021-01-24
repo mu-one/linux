@@ -240,6 +240,36 @@
 			reg = <0x2 0x3d2b0000 0x0 0x4000>;
 		};
 
+		smc: smc@23e050000 {
+			compatible = "apple,smc-m1";
+			reg-names = "base", "coproc";
+			reg = <0x2 0x3e050000 0x0 0x4000>, <0x2 0x3e400000 0x0 0x4000>;
+			mboxes = <&smc_mbox>;
+			mbox-names = "mbox";
+			#mbox-cells = <1>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-9 = <0x10000>;
+			gpio-13 = <0x800000>;
+			gpio-15 = <0>;
+			gpio-20 = <0>;
+		};
+
+		smc_mbox: mbox@23e408000 {
+			compatible = "apple,t8103-smc-mailbox",
+				"apple,t8103-asc-mailbox";
+			reg = <0x2 0x3e408000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 400 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 401 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 402 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 403 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "send-empty", "send-not-empty",
+				"recv-empty", "recv-not-empty";
+			#mbox-cells = <0>;
+		};
+
 		pinctrl_smc: pinctrl@23e820000 {
 			compatible = "apple,t8103-pinctrl", "apple,pinctrl";
 			reg = <0x2 0x3e820000 0x0 0x4000>;
