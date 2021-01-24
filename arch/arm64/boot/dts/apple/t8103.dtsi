@@ -143,6 +143,29 @@
 			reg = <0x2 0x3b100000 0x0 0x8000>;
 		};
 
+		smc: smc@23e050000 {
+			compatible = "apple,smc-m1";
+			reg = <0x2 0x3e050000 0x0 0x4000>;
+			mboxes = <&smc_mbox 32>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-9 = <0x10000>;
+			gpio-13 = <0x800000>;
+			gpio-15 = <0>;
+			gpio-20 = <0>;
+		};
+
+		smc_mbox: mbox@23e400000 {
+			compatible = "apple,t8103-smc-mailbox";
+			reg = <0x2 0x3e400000 0x0 0x20000>, <0x2 0x3fe00000 0x0 0x100000>;
+			reg-names = "mbox", "shmem";
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 400 IRQ_TYPE_LEVEL_HIGH>, <AIC_IRQ 403 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "can-send", "can-recv";
+			#mbox-cells = <1>;
+		};
+
 		dwc3_0_dart_0: iommu@382f00000 {
 			compatible = "apple,t8103-dart";
 			reg = <0x3 0x82f00000 0x0 0x4000>;
