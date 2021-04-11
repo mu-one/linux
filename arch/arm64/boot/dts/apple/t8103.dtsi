@@ -10,6 +10,10 @@
 #include <dt-bindings/interrupt-controller/apple-aic.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 
+#define APPLE_CLK_UART0  0x270
+#define APPLE_CLK_UART_P 0x220
+#define APPLE_CLK_SIO    0x1c0
+
 / {
 	compatible = "apple,t8103", "apple,arm-platform";
 
@@ -121,7 +125,7 @@
 			 * TODO: figure out the clocking properly, there may
 			 * be a third selectable clock.
 			 */
-			clocks = <&clk24>, <&clk24>;
+			clocks = <&pmgr0 APPLE_CLK_UART0>, <&clk24>;
 			clock-names = "uart", "clk_uart_baud0";
 			status = "disabled";
 		};
@@ -181,6 +185,16 @@
 			interrupts = <AIC_IRQ 857 IRQ_TYPE_LEVEL_HIGH>;
 			dr_mode = "host";
 			iommus = <&dwc3_1_dart_0 0>, <&dwc3_1_dart_1 1>;
+		};
+
+		pmgr0: clock-controller@23b700000 {
+			compatible = "apple,t8103-gate-clock-controller";
+			#clock-cells = <1>;
+			reg = <0x2 0x3b700000 0x0 0x4000>;
+			clock-indices = <APPLE_CLK_SIO>, <APPLE_CLK_UART_P>, <APPLE_CLK_UART0>;
+			clock-output-names = "clock-sio", "clock-uart-p", "clock-uart0";
+			clocks = <&clk24>, <&pmgr0 APPLE_CLK_SIO>,
+				<&pmgr0 APPLE_CLK_UART_P>;
 		};
 
 		gpio_clk: gpio_clk@23b700130 {
