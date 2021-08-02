@@ -96,6 +96,10 @@
 		};
 	};
 
+	display-subsystem {
+		compatible = "apple,m1-dcp";
+	};
+
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupt-parent = <&aic>;
