@@ -2413,16 +2413,21 @@ static int drm_fbdev_client_hotplug(struct drm_client_dev *client)
 
 	drm_fb_helper_prepare(dev, fb_helper, &drm_fb_helper_generic_funcs);
 
+	printk("A\n");
+
 	ret = drm_fb_helper_init(dev, fb_helper);
 	if (ret)
 		goto err;
+	printk("B\n");
 
 	if (!drm_drv_uses_atomic_modeset(dev))
 		drm_helper_disable_unused_functions(dev);
 
+	printk("C\n");
 	ret = drm_fb_helper_initial_config(fb_helper, fb_helper->preferred_bpp);
 	if (ret)
 		goto err_cleanup;
+	printk("D\n");
 
 	return 0;
 

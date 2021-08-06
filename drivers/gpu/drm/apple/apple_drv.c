@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright 2021 Alyssa Rosenzweig <alyssa@rosenzweig.io> */
+/* Based on meson driver which is
+ * Copyright (C) 2016 BayLibre, SAS
+ * Author: Neil Armstrong <narmstrong@baylibre.com>
+ * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
+ * Copyright (C) 2014 Endless Mobile
+ */
 
 #include <linux/module.h>
 #include <linux/clk.h>
@@ -29,18 +35,60 @@ struct apple_drm_private {
 	void __iomem		*regs;
 };
 
+static int apple_dumb_create(struct drm_file *file, struct drm_device *dev,
+			     struct drm_mode_create_dumb *args)
+{
+	printk("dumb create\n");
+	/*
+	 * We need 64bytes aligned stride, and PAGE aligned size
+	 */
+	args->pitch = ALIGN(DIV_ROUND_UP(args->width * args->bpp, 8), SZ_64);
+	args->size = PAGE_ALIGN(args->pitch * args->height);
+
+	return drm_gem_cma_dumb_create_internal(file, dev, args);
+}
+
 DEFINE_DRM_GEM_CMA_FOPS(apple_fops);
 
 static const struct drm_driver apple_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
 	.name = "apple",
-	.desc = "Apple Display Controller",
+	.desc = "Apple Display Controller DRM driver",
 	.date = "20210801",
 	.major = 1,
 	.minor = 0,
 	.patchlevel = 0,
 	.fops = &apple_fops,
-	DRM_GEM_CMA_DRIVER_OPS,
+	DRM_GEM_CMA_DRIVER_OPS_WITH_DUMB_CREATE(apple_dumb_create),
+};
+
+static int apple_plane_atomic_check(struct drm_plane *plane,
+				    struct drm_atomic_state *state)
+{
+	/* Stub */
+	pr_info("Checking atomic plane");
+	return 0;
+
+}
+
+static void apple_plane_atomic_disable(struct drm_plane *plane,
+				       struct drm_atomic_state *state)
+{
+	/* STUB */
+	pr_info("Disabling atomic plane");
+}
+
+static void apple_plane_atomic_update(struct drm_plane *plane,
+				      struct drm_atomic_state *state)
+{
+	/* STUB */
+	pr_info("Updating atomic plane");
+}
+
+static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
+	.atomic_check	= apple_plane_atomic_check,
+	.atomic_disable	= apple_plane_atomic_disable,
+	.atomic_update	= apple_plane_atomic_update,
 };
 
 static const struct drm_plane_funcs apple_plane_funcs = {
@@ -71,11 +119,13 @@ struct drm_plane *apple_plane_init(struct drm_device *dev)
 
 	plane = devm_kzalloc(dev->dev, sizeof(*plane), GFP_KERNEL);
 
-	ret = drm_universal_plane_init(dev, plane, 0, &apple_plane_funcs,
+	ret = drm_universal_plane_init(dev, plane, 0x1, &apple_plane_funcs,
 				       apple_plane_formats,
 				       ARRAY_SIZE(apple_plane_formats),
 				       apple_format_modifiers,
 				       DRM_PLANE_TYPE_PRIMARY, NULL);
+
+	drm_plane_helper_add(plane, &apple_plane_helper_funcs);
 
 	if (ret)
 		return ERR_PTR(ret);
@@ -111,12 +161,71 @@ static const struct drm_mode_config_helper_funcs apple_mode_config_helpers = {
 	.atomic_commit_tail = drm_atomic_helper_commit_tail_rpm,
 };
 
+static void apple_connector_destroy(struct drm_connector *connector)
+{
+	drm_connector_cleanup(connector);
+}
+
+static enum drm_connector_status
+apple_connector_detect(struct drm_connector *connector, bool force)
+{
+	/* TODO: stub */
+	return connector_status_connected;
+}
+
+static const struct drm_connector_funcs apple_connector_funcs = {
+	.detect			= apple_connector_detect,
+	.fill_modes		= drm_helper_probe_single_connector_modes,
+	.destroy		= apple_connector_destroy,
+	.reset			= drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state	= drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state	= drm_atomic_helper_connector_destroy_state,
+};
+
+static int apple_connector_get_modes(struct drm_connector *connector)
+{
+	struct drm_device *dev = connector->dev;
+	struct drm_display_mode *mode;
+
+	/* STUB */
+
+	struct drm_display_mode dummy = {
+		.name = "1920x1080",
+		DRM_SIMPLE_MODE(1920, 1080, 64, 38),
+		.picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9,
+	};
+
+
+	mode = drm_mode_duplicate(dev, &dummy);
+	if (!mode) {
+		DRM_ERROR("Failed to create a new display mode\n");
+		return 0;
+	}
+
+	drm_mode_probed_add(connector, mode);
+	return 1;
+}
+
+static int apple_connector_mode_valid(struct drm_connector *connector,
+					   struct drm_display_mode *mode)
+{
+	/* STUB */
+	return MODE_OK;
+}
+
+static const
+struct drm_connector_helper_funcs apple_connector_helper_funcs = {
+	.get_modes	= apple_connector_get_modes,
+	.mode_valid	= apple_connector_mode_valid,
+};
+
 static int apple_platform_probe(struct platform_device *pdev)
 {
 	struct apple_drm_private *apple;
 	struct drm_plane *plane;
 	struct drm_crtc *crtc;
 	struct drm_encoder *encoder;
+	struct drm_connector *connector;
 	int ret;
 
 	apple = devm_drm_dev_alloc(&pdev->dev, &apple_drm_driver,
@@ -151,7 +260,21 @@ static int apple_platform_probe(struct platform_device *pdev)
 	printk("got crtc %p\n", crtc);
 
 	encoder = devm_kzalloc(&pdev->dev, sizeof(*encoder), GFP_KERNEL);
+	encoder->possible_crtcs = drm_crtc_mask(crtc);
 	ret = drm_encoder_init(&apple->drm, encoder, &apple_encoder_funcs, DRM_MODE_ENCODER_TMDS /* XXX */, "apple_hdmi");
+	if (ret)
+		goto err_unload;
+
+	connector = devm_kzalloc(&pdev->dev, sizeof(*connector), GFP_KERNEL);
+
+	drm_connector_helper_add(connector,
+				 &apple_connector_helper_funcs);
+
+	ret = drm_connector_init(&apple->drm, connector, &apple_connector_funcs, DRM_MODE_CONNECTOR_HDMIA);
+	if (ret)
+		goto err_unload;
+
+	ret = drm_connector_attach_encoder(connector, encoder);
 	if (ret)
 		goto err_unload;
 
@@ -202,5 +325,5 @@ static struct platform_driver apple_platform_driver = {
 module_platform_driver(apple_platform_driver);
 
 MODULE_AUTHOR("Alyssa Rosenzweig <alyssa@rosenzweig.io>");
-MODULE_DESCRIPTION("Apple Silicon DRM driver");
+MODULE_DESCRIPTION("Apple Display Controller DRM driver");
 MODULE_LICENSE("GPL_v2");
