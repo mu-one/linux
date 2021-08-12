@@ -10,9 +10,15 @@
 #include <dt-bindings/interrupt-controller/apple-aic.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 
-#define APPLE_CLK_UART0  0x270
-#define APPLE_CLK_UART_P 0x220
-#define APPLE_CLK_SIO    0x1c0
+#define APPLE_CLK_GPIO     0x130
+#define APPLE_CLK_SIOBUSIF 0x1c0
+#define APPLE_CLK_SIO      0x1c8
+#define APPLE_CLK_SPI_P    0x218
+#define APPLE_CLK_UART_P   0x220
+#define APPLE_CLK_SPI3     0x258
+#define APPLE_CLK_UART0    0x270
+
+#define APPLE_CLK_NUB_GPIO 0x80
 
 / {
 	compatible = "apple,t8103", "apple,arm-platform";
@@ -191,18 +197,23 @@
 			compatible = "apple,t8103-gate-clock-controller";
 			#clock-cells = <1>;
 			reg = <0x2 0x3b700000 0x0 0x4000>;
-			clock-indices = <APPLE_CLK_SIO>, <APPLE_CLK_UART_P>, <APPLE_CLK_UART0>;
-			clock-output-names = "clock-sio", "clock-uart-p", "clock-uart0";
-			clocks = <&clk24>, <&pmgr0 APPLE_CLK_SIO>,
-				<&pmgr0 APPLE_CLK_UART_P>;
+			clock-indices = <APPLE_CLK_GPIO>, <APPLE_CLK_SIOBUSIF>, <APPLE_CLK_SIO>,
+				<APPLE_CLK_SPI_P>, <APPLE_CLK_UART_P>, <APPLE_CLK_SPI3>,
+				<APPLE_CLK_UART0>;
+			clock-output-names = "clock-gpio", "clock-sio-busif", "clock-sio",
+				"clock-spi-p", "clock-uart-p", "clock-spi3", "clock-uart0";
+			clocks = <&clk24>, <&clk24>, <&pmgr0 APPLE_CLK_SIOBUSIF>,
+				<&pmgr0 APPLE_CLK_SIO>, <&pmgr0 APPLE_CLK_SIOBUSIF>,
+				<&pmgr0 APPLE_CLK_SPI_P>, <&pmgr0 APPLE_CLK_UART_P>;
 		};
 
-		gpio_clk: gpio_clk@23b700130 {
-			compatible = "apple,pmgr-clk-gate";
-			#clock-cells = <0>;
-			reg = <0x2 0x3b700130 0x0 0x8>;
-			clocks = <&clk24>;
-			clock-output-names = "gpio_clk";
+		pmgr1: clock-controller@23d280000 {
+			compatible = "apple,t8103-gate-clock-controller";
+			#clock-cells = <1>;
+			reg = <0x2 0x3d280000 0x0 0x4000>;
+			clock-indices = <APPLE_CLK_NUB_GPIO>;
+			clock-output-names = "clock-nub-gpio";
+			clocks = <&pmgr0 APPLE_CLK_NUB_GPIO>;
 		};
 
 		gpio: pinctrl@23c100000 {
@@ -213,21 +224,13 @@
 			interrupt-parent = <&aic>;
 			interrupts = <0 190 4   0 191 4   0 192 4   0 193 4   0 194 4   0 195 4   0 196 4>;
 
-			clocks = <&gpio_clk>;
+			clocks = <&pmgr0 APPLE_CLK_GPIO>;
 
 			gpio-controller;
 			#gpio-cells = <2>;
 
 			interrupt-controller;
 			#interrupt-cells = <2>;
-		};
-
-		nub_gpio_clk: nub_gpio_clk@23d280080 {
-			compatible = "apple,pmgr-clk-gate";
-			#clock-cells = <0>;
-			reg = <0x2 0x3d280080 0x0 0x8>;
-			clocks = <&clk24>;
-			clock-output-names = "nub_gpio_clk";
 		};
 
 		nub_gpio: pinctrl@23d1f0000 {
@@ -240,7 +243,7 @@
 			interrupt-parent = <&aic>;
 			interrupts = <0 330 4   0 331 4   0 332 4   0 333 4   0 334 4   0 335 4   0 336 4>;
 
-			clocks = <&nub_gpio_clk>;
+			clocks = <&pmgr1 APPLE_CLK_NUB_GPIO>;
 
 			gpio-controller;
 			#gpio-cells = <2>;
@@ -249,44 +252,12 @@
 			#interrupt-cells = <2>;
 		};
 
-		sio_busif_clk: sio_busif_clk@23b7001c0 {
-			compatible = "apple,pmgr-clk-gate";
-			#clock-cells = <0>;
-			reg = <0x2 0x3b7001c0 0x0 0x8>;
-			clocks = <&clk24>;
-			clock-output-names = "sio_busif_clk";
-		};
-
-		sio_clk: sio_clk@23b7001c8 {
-			compatible = "apple,pmgr-clk-gate";
-			#clock-cells = <0>;
-			reg = <0x2 0x3b7001c8 0x0 0x8>;
-			clocks = <&sio_busif_clk>;
-			clock-output-names = "sio_clk";
-		};
-
-		spi_p_clk: spi_p_clk@23b700218 {
-			compatible = "apple,pmgr-clk-gate";
-			#clock-cells = <0>;
-			reg = <0x2 0x3b700218 0x0 0x8>;
-			clocks = <&sio_clk>;
-			clock-output-names = "spi_p_clk";
-		};
-
-		spi3_clk: spi3_clk@23b700258 {
-			compatible = "apple,pmgr-clk-gate";
-			#clock-cells = <0>;
-			reg = <0x2 0x3b700258 0x0 0x8>;
-			clocks = <&spi_p_clk>;
-			clock-output-names = "spi3_clk";
-		};
-
 		spi3: spi@23510c000 {
 			compatible = "apple,spi-mc-m1";
 			reg = <0x2 0x3510c000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
 			interrupts = <0 617 4>;
-			clocks = <&spi3_clk>;
+			clocks = <&pmgr0 APPLE_CLK_SPI3>;
 			cs-gpios = <&gpio 49 0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
