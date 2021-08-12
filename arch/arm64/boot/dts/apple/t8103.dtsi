@@ -221,7 +221,13 @@
 			reg = <0x2 0x3c100000 0x0 0x100000>;
 
 			interrupt-parent = <&aic>;
-			interrupts = <0 190 4   0 191 4   0 192 4   0 193 4   0 194 4   0 195 4   0 196 4>;
+			interrupts = <AIC_IRQ 190 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 191 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 192 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 193 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 194 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 195 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 196 IRQ_TYPE_LEVEL_HIGH>;
 
 			clocks = <&pmgr0 APPLE_CLK_GPIO>;
 
@@ -240,7 +246,13 @@
 			pin-prefix = "nubgpio";
 
 			interrupt-parent = <&aic>;
-			interrupts = <0 330 4   0 331 4   0 332 4   0 333 4   0 334 4   0 335 4   0 336 4>;
+			interrupts = <AIC_IRQ 330 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 331 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 332 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 333 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 334 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 335 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 336 IRQ_TYPE_LEVEL_HIGH>;
 
 			clocks = <&pmgr1 APPLE_CLK_NUB_GPIO>;
 
@@ -256,7 +268,7 @@
 			compatible = "apple,spi-mc-m1";
 			reg = <0x2 0x3510c000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
-			interrupts = <0 617 4>;
+			interrupts = <AIC_IRQ 617 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&pmgr0 APPLE_CLK_SPI3>;
 			cs-gpios = <&gpio 49 0>;
 			#address-cells = <1>;
