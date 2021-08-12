@@ -10,6 +10,16 @@
 #include <dt-bindings/interrupt-controller/apple-aic.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 
+#define APPLE_CLK_GPIO     0x130
+#define APPLE_CLK_SIOBUSIF 0x1c0
+#define APPLE_CLK_SIO      0x1c8
+#define APPLE_CLK_SPI_P    0x218
+#define APPLE_CLK_UART_P   0x220
+#define APPLE_CLK_SPI3     0x258
+#define APPLE_CLK_UART0    0x270
+
+#define APPLE_CLK_NUB_GPIO 0x80
+
 / {
 	compatible = "apple,t8103", "apple,arm-platform";
 
@@ -163,6 +173,14 @@
 				power-domains = <&ps_sio>;
 			};
 
+			ps_gpio0: power-controller@130 {
+				domain-output-names = "gpio";
+				compatible = "apple,t8103-pmgr-pstate", "apple,pmgr-pstate";
+				reg = <0x130>;
+				#power-domain-cells = <0>;
+				power-domains = <&ps_sio>;
+			};
+
 			ps_uart0: power-controller@270 {
 				domain-output-names = "uart0";
 				compatible = "apple,t8103-pmgr-pstate", "apple,pmgr-pstate";
@@ -195,5 +213,59 @@
 				power-domains = <&ps_uart_p>;
 			};
 		};
-        };
+
+		gpio: pinctrl@23c100000 {
+			compatible = "apple,gpio-v0";
+			reg = <0x2 0x3c100000 0x0 0x100000>;
+			pin-count = <212>;
+
+			interrupt-parent = <&aic>;
+			interrupts = <0 190 4   0 191 4   0 192 4   0 193 4   0 194 4   0 195 4   0 196 4>;
+
+			power-domains = <&ps_gpio>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		nub_gpio: pinctrl@23d1f0000 {
+			compatible = "apple,gpio-v0";
+			reg = <0x2 0x3d1f0000 0x0 0x4000>;
+			pin-count = <23>;
+			pin-base = <212>;
+			pin-prefix = "nubgpio";
+
+			interrupt-parent = <&aic>;
+			interrupts = <0 330 4   0 331 4   0 332 4   0 333 4   0 334 4   0 335 4   0 336 4>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		spi3: spi@23510c000 {
+			compatible = "apple,spi-mc-m1";
+			reg = <0x2 0x3510c000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <0 617 4>;
+			cs-gpios = <&gpio 49 0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			keyboard@0 {
+				compatible = "input,applespi-kbd-v1";
+				reg = <0>;
+				spi-max-frequency = <2000000>;
+				spien-gpios = <&gpio 195 0>;
+				irq-gpios = <&nub_gpio 13 0>;
+				interrupt-parent = <&nub_gpio>;
+				interrupts = <13 8>;
+			};
+		};
+	};
 };
