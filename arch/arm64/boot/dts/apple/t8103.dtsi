@@ -217,7 +217,6 @@
 			clocks = <&pmgr0 APPLE_CLK_NUB_GPIO>;
 		};
 
-
 		pinctrl_ap: pinctrl@23c100000 {
 			compatible = "apple,t8103-pinctrl", "apple,pinctrl";
 			reg = <0x2 0x3c100000 0x0 0x100000>;
@@ -262,6 +261,11 @@
 				     <AIC_IRQ 334 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 335 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 336 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		reboot: reboot@23d2b0000 {
+			compatible = "apple,reboot-v0";
+			reg = <0x2 0x3d2b0000 0x0 0x4000>;
 		};
 
 		pinctrl_smc: pinctrl@23e820000 {
