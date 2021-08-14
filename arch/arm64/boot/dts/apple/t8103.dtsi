@@ -221,6 +221,11 @@
 			clocks = <&pmgr0 APPLE_CLK_NUB_GPIO>;
 		};
 
+		reboot: reboot@23d2b0000 {
+			compatible = "apple,reboot-v0";
+			reg = <0x2 0x3d2b0000 0x0 0x4000>;
+		};
+
 		gpio: pinctrl@23c100000 {
 			compatible = "apple,t8103-pinctrl", "apple,pinctrl";
 			reg = <0x2 0x3c100000 0x0 0x100000>;
