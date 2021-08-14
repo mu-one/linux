@@ -21,9 +21,9 @@
 #define REG_UNKNOWN_1			0x14
 #define REG_INTERVAL_1			0x18
 #define REG_CTRL_1			0x1c
-#define  REG_CTRL_ENABLE_IRQ		1
-#define  REG_CTRL_ACK_IRQ		2
-#define  REG_CTRL_ENABLE_REBOOT 	4
+#define  REG_CTRL_ENABLE_IRQ		  BIT(0)
+#define  REG_CTRL_ACK_IRQ		  BIT(1)
+#define  REG_CTRL_ENABLE_REBOOT 	  BIT(2)
 
 struct apple_reboot {
 	struct device *dev;
