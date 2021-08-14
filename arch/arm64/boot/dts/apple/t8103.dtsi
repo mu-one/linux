@@ -169,7 +169,6 @@
 
 		spi3: spi@23510c000 {
 			compatible = "apple,spi-mc-m1";
-			reg = <0x2 0x3510c000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
 			interrupts = <AIC_IRQ 617 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&pmgr0 APPLE_CLK_SPI3>;
@@ -234,6 +233,11 @@
 				     <AIC_IRQ 336 IRQ_TYPE_LEVEL_HIGH>;
 
 			clocks = <&pmgr1 APPLE_CLK_NUB_GPIO>;
+		};
+
+		reboot: reboot@23d2b0000 {
+			compatible = "apple,reboot-v0";
+			reg = <0x2 0x3d2b0000 0x0 0x4000>;
 		};
 
 		pinctrl_smc: pinctrl@23e820000 {
