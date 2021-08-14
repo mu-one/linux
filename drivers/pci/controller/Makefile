@@ -40,6 +40,7 @@ obj-$(CONFIG_PCIE_HISI_ERR) += pcie-hisi-error.o
 # pcie-hisi.o quirks are needed even without CONFIG_PCIE_DW
 obj-y				+= dwc/
 obj-y				+= mobiveil/
+obj-y += pcie-apple-m1.o
 
 
 # The following drivers are for devices that use the generic ACPI
