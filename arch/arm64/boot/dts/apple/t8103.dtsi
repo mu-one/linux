@@ -165,40 +165,9 @@
 			clocks = <&pmgr0 APPLE_CLK_NUB_GPIO>;
 		};
 
-		gpio: pinctrl@23c100000 {
-			compatible = "apple,gpio-v0";
-			reg = <0x2 0x3c100000 0x0 0x100000>;
-			pin-count = <212>;
-
-			interrupt-parent = <&aic>;
-			interrupts = <0 190 4   0 191 4   0 192 4   0 193 4   0 194 4   0 195 4   0 196 4>;
-
-			clocks = <&pmgr0 APPLE_CLK_GPIO>;
-
-			gpio-controller;
-			#gpio-cells = <2>;
-
-			interrupt-controller;
-			#interrupt-cells = <2>;
-		};
-
-		nub_gpio: pinctrl@23d1f0000 {
-			compatible = "apple,gpio-v0";
-			reg = <0x2 0x3d1f0000 0x0 0x4000>;
-			pin-count = <23>;
-			pin-base = <212>;
-			pin-prefix = "nubgpio";
-
-			interrupt-parent = <&aic>;
-			interrupts = <0 330 4   0 331 4   0 332 4   0 333 4   0 334 4   0 335 4   0 336 4>;
-
-			clocks = <&pmgr1 APPLE_CLK_NUB_GPIO>;
-
-			gpio-controller;
-			#gpio-cells = <2>;
-
-			interrupt-controller;
-			#interrupt-cells = <2>;
+		reboot: reboot@23d2b0000 {
+			compatible = "apple,reboot-v0";
+			reg = <0x2 0x3d2b0000 0x0 0x4000>;
 		};
 
 		spi3: spi@23510c000 {
