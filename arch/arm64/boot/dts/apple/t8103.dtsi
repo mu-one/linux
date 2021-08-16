@@ -11,6 +11,16 @@
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/pinctrl/apple.h>
 
+#define APPLE_CLK_GPIO     0x130
+#define APPLE_CLK_SIOBUSIF 0x1c0
+#define APPLE_CLK_SIO      0x1c8
+#define APPLE_CLK_SPI_P    0x218
+#define APPLE_CLK_UART_P   0x220
+#define APPLE_CLK_SPI3     0x258
+#define APPLE_CLK_UART0    0x270
+
+#define APPLE_CLK_NUB_GPIO 0x80
+
 / {
 	compatible = "apple,t8103", "apple,arm-platform";
 
@@ -122,7 +132,7 @@
 			 * TODO: figure out the clocking properly, there may
 			 * be a third selectable clock.
 			 */
-			clocks = <&clk24>, <&clk24>;
+			clocks = <&pmgr0 APPLE_CLK_UART0>, <&clk24>;
 			clock-names = "uart", "clk_uart_baud0";
 			status = "disabled";
 		};
@@ -132,6 +142,50 @@
 			#interrupt-cells = <3>;
 			interrupt-controller;
 			reg = <0x2 0x3b100000 0x0 0x8000>;
+		};
+
+		pmgr0: clock-controller@23b700000 {
+			compatible = "apple,t8103-gate-clock-controller";
+			#clock-cells = <1>;
+			reg = <0x2 0x3b700000 0x0 0x4000>;
+			clock-indices = <APPLE_CLK_GPIO>, <APPLE_CLK_SIOBUSIF>, <APPLE_CLK_SIO>,
+				<APPLE_CLK_SPI_P>, <APPLE_CLK_UART_P>, <APPLE_CLK_SPI3>,
+				<APPLE_CLK_UART0>;
+			clock-output-names = "clock-gpio", "clock-sio-busif", "clock-sio",
+				"clock-spi-p", "clock-uart-p", "clock-spi3", "clock-uart0";
+			clocks = <&clk24>, <&clk24>, <&pmgr0 APPLE_CLK_SIOBUSIF>,
+				<&pmgr0 APPLE_CLK_SIO>, <&pmgr0 APPLE_CLK_SIOBUSIF>,
+				<&pmgr0 APPLE_CLK_SPI_P>, <&pmgr0 APPLE_CLK_UART_P>;
+		};
+
+		pmgr1: clock-controller@23d280000 {
+			compatible = "apple,t8103-gate-clock-controller";
+			#clock-cells = <1>;
+			reg = <0x2 0x3d280000 0x0 0x4000>;
+			clock-indices = <APPLE_CLK_NUB_GPIO>;
+			clock-output-names = "clock-nub-gpio";
+			clocks = <&pmgr0 APPLE_CLK_NUB_GPIO>;
+		};
+
+		spi3: spi@23510c000 {
+			compatible = "apple,spi-mc-m1";
+			reg = <0x2 0x3510c000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 617 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&pmgr0 APPLE_CLK_SPI3>;
+			cs-gpios = <&pinctrl_ap 49 0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			keyboard@0 {
+				compatible = "input,applespi-kbd-v1";
+				reg = <0>;
+				spi-max-frequency = <2000000>;
+				spien-gpios = <&pinctrl_ap 195 0>;
+				irq-gpios = <&pinctrl_nub 13 0>;
+				interrupt-parent = <&pinctrl_nub>;
+				interrupts = <13 8>;
+			};
 		};
 
 		pinctrl_ap: pinctrl@23c100000 {
@@ -152,6 +206,8 @@
 				     <AIC_IRQ 195 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 196 IRQ_TYPE_LEVEL_HIGH>;
 
+			clocks = <&pmgr0 APPLE_CLK_GPIO>;
+
 			pcie_pins: pcie-pins {
 				pinmux = <APPLE_PINMUX(150, 1)>,
 					 <APPLE_PINMUX(151, 1)>,
@@ -165,7 +221,7 @@
 
 			gpio-controller;
 			#gpio-cells = <2>;
-			gpio-ranges = <&pinctrl_nub 0 0 23>;
+			gpio-ranges = <&pinctrl_nub 0 212 23>;
 
 			interrupt-controller;
 			interrupt-parent = <&aic>;
@@ -176,6 +232,8 @@
 				     <AIC_IRQ 334 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 335 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 336 IRQ_TYPE_LEVEL_HIGH>;
+
+			clocks = <&pmgr1 APPLE_CLK_NUB_GPIO>;
 		};
 
 		pinctrl_smc: pinctrl@23e820000 {
