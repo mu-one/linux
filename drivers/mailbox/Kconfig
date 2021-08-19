@@ -8,6 +8,15 @@ menuconfig MAILBOX
 
 if MAILBOX
 
+config APPLE_MBOX
+	tristate "Apple ASC mailbox driver"
+	depends on ARCH_APPLE || (ARM64 && COMPILE_TEST)
+	default ARCH_APPLE
+	help
+	  Say Y here if you want to build the Apple ASC mailbox driver.
+	  Apple SoCs have various co-processors (NVME, display controller, etc.)
+	  which communicate with the main processor using these mailboxes.
+
 config ARM_MHU
 	tristate "ARM MHU Mailbox"
 	depends on ARM_AMBA
