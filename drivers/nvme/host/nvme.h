@@ -138,6 +138,13 @@ enum nvme_quirks {
 	 * 48 bits.
 	 */
 	NVME_QUIRK_DMA_ADDRESS_BITS_48		= (1 << 16),
+
+	/*
+	 * The controller does not properly handle SCAN NS LIST
+	 * commands.
+	 */
+	NVME_QUIRK_NO_SCAN_NS_LIST		= (1 << 17),
+
 };
 
 /*
