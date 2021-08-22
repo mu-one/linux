@@ -76,7 +76,7 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 				      struct drm_atomic_state *state)
 {
 	/* STUB */
-	pr_info("Updating atomic plane");
+	printk("Updating atomic plane");
 }
 
 static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
@@ -214,6 +214,39 @@ struct drm_connector_helper_funcs apple_connector_helper_funcs = {
 	.mode_valid	= apple_connector_mode_valid,
 };
 
+static void apple_crtc_atomic_enable(struct drm_crtc *crtc,
+				     struct drm_atomic_state *state)
+{
+	printk("atomic_enable");
+	drm_crtc_vblank_on(crtc);
+}
+
+static void apple_crtc_atomic_disable(struct drm_crtc *crtc,
+				      struct drm_atomic_state *state)
+{
+	drm_crtc_vblank_off(crtc);
+	printk("atomic_disable");
+}
+
+static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
+				    struct drm_atomic_state *state)
+{
+	printk("atomic_begin");
+}
+
+static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
+				    struct drm_atomic_state *state)
+{
+	printk("atomic_flush");
+}
+
+static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
+	.atomic_begin	= apple_crtc_atomic_begin,
+	.atomic_flush	= apple_crtc_atomic_flush,
+	.atomic_enable	= apple_crtc_atomic_enable,
+	.atomic_disable	= apple_crtc_atomic_disable,
+};
+
 static int apple_platform_probe(struct platform_device *pdev)
 {
 	struct apple_drm_private *apple;
@@ -276,6 +309,9 @@ static int apple_platform_probe(struct platform_device *pdev)
 	ret = drm_crtc_init_with_planes(&apple->drm, crtc, plane, NULL, &apple_crtc_funcs, NULL);
 	if (ret)
 		goto err_unload;
+
+
+	drm_crtc_helper_add(crtc, &apple_crtc_helper_funcs);
 
 	printk("got crtc %p\n", crtc);
 
