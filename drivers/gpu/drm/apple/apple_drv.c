@@ -21,9 +21,9 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_drv.h>
-#include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_modeset_helper.h>
@@ -41,7 +41,7 @@ struct apple_drm_private {
 	void __iomem		*regs;
 };
 
-DEFINE_DRM_GEM_FOPS(apple_fops);
+DEFINE_DRM_GEM_CMA_FOPS(apple_fops);
 
 static const struct drm_driver apple_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
@@ -52,7 +52,7 @@ static const struct drm_driver apple_drm_driver = {
 	.minor = 0,
 	.patchlevel = 0,
 	.fops = &apple_fops,
-	DRM_GEM_SHMEM_DRIVER_OPS,
+	DRM_GEM_CMA_DRIVER_OPS,
 };
 
 static int apple_plane_atomic_check(struct drm_plane *plane,
@@ -76,6 +76,23 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 {
 	/* STUB */
 	printk("Updating atomic plane");
+
+	struct drm_plane_state *plane_state;
+	struct drm_framebuffer *fb;
+	struct drm_gem_shmem_object *obj;
+	struct sg_table *sgt;
+	dma_addr_t dva;
+
+	plane_state = drm_atomic_get_new_plane_state(state, plane);
+	fb = plane_state->fb;
+
+	dva = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
+	printk("Address %X\n", dva);
+
+#if 0
+	obj = to_drm_gem_shmem_object(fb->obj[0]);
+	sgt = drm_gem_shmem_get
+#endif
 }
 
 static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
@@ -234,6 +251,22 @@ static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
+#if 0
+	struct drm_crtc_state *state = drm_atomic_get_new_crtc_state(state, crtc);
+	int i;
+
+	for_each_set_bit(i, &state->plane_mask) {
+		struct drm_plane *plane;
+		printk("Plane %d\n", i);
+		plane = drm_plane_from_index(crtc->dev, i);
+
+		struct drm_plane_state *plane_state;
+		plane_state = drm_atomic_get_new_plane_state(state, plane);
+
+		struct drm_framebuffer *fb;
+		fb = plane_state->fb;
+	}
+#endif
 	printk("atomic_flush");
 }
 
