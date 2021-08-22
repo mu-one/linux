@@ -40,6 +40,7 @@
 struct apple_drm_private {
 	struct drm_device	drm;
 	void __iomem		*regs;
+	struct device *dev;
 };
 
 #define to_apple_drm_private(x) \
@@ -92,7 +93,13 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 	fb = plane_state->fb;
 
 	dva = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
-//	writel(dva, apple->regs + DISP0_FRAMEBUFFER_0);
+
+
+//	void *framebuffer = dma_alloc_coherent(apple->dev, 1920 * 1080 * 4, &dva, GFP_KERNEL);
+	//memset(framebuffer, 0x80, 1920 * 1080 * 4);
+
+
+	writel(dva, apple->regs + DISP0_FRAMEBUFFER_0);
 	writel(DISP0_FORMAT_BGRA, apple->regs + DISP0_FORMAT);
 	printk("Address %X\n", dva);
 
@@ -297,6 +304,8 @@ static int apple_platform_probe(struct platform_device *pdev)
 				   struct apple_drm_private, drm);
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
+
+	apple->dev = &pdev->dev;
 
 #if 0
 	struct iommu_domain *domain = iommu_get_domain_for_dev(apple->dev);
