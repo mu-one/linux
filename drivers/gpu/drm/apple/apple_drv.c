@@ -21,7 +21,7 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_drv.h>
-#include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_gem_cma_helper.h>
@@ -42,20 +42,7 @@ struct apple_drm_private {
 	void __iomem		*regs;
 };
 
-static int apple_dumb_create(struct drm_file *file, struct drm_device *dev,
-			     struct drm_mode_create_dumb *args)
-{
-	printk("dumb create\n");
-	/*
-	 * We need 64bytes aligned stride, and PAGE aligned size
-	 */
-	args->pitch = ALIGN(DIV_ROUND_UP(args->width * args->bpp, 8), SZ_64);
-	args->size = PAGE_ALIGN(args->pitch * args->height);
-
-	return drm_gem_cma_dumb_create_internal(file, dev, args);
-}
-
-DEFINE_DRM_GEM_CMA_FOPS(apple_fops);
+DEFINE_DRM_GEM_FOPS(apple_fops);
 
 static const struct drm_driver apple_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
@@ -66,7 +53,7 @@ static const struct drm_driver apple_drm_driver = {
 	.minor = 0,
 	.patchlevel = 0,
 	.fops = &apple_fops,
-	DRM_GEM_CMA_DRIVER_OPS_WITH_DUMB_CREATE(apple_dumb_create),
+	DRM_GEM_SHMEM_DRIVER_OPS,
 };
 
 static int apple_plane_atomic_check(struct drm_plane *plane,
@@ -109,6 +96,7 @@ static const struct drm_plane_funcs apple_plane_funcs = {
 
 uint32_t apple_plane_formats[] = {
 	/* TODO: More formats */
+	DRM_FORMAT_XRGB8888,
 	DRM_FORMAT_ARGB8888,
 };
 
@@ -197,11 +185,11 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 	/* STUB */
 
 	struct drm_display_mode dummy = {
-		.name = "1920x1080",
-		DRM_SIMPLE_MODE(1920, 1080, 64, 38),
-		.picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9,
+		DRM_SIMPLE_MODE(1920, 1080, 508, 286),
 	};
 
+	dummy.clock = 60 * dummy.hdisplay * dummy.vdisplay;
+	drm_mode_set_name(&dummy);
 
 	mode = drm_mode_duplicate(dev, &dummy);
 	if (!mode) {
@@ -253,14 +241,17 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	printk("set contig");
+
 	framebuffer = dma_alloc_coherent(&pdev->dev, 1920 * 1080 * 4, &dva, GFP_KERNEL);
 
+	printk("framebuffer %p dva %X", framebuffer, (uint32_t) dva);
 	memset(framebuffer, 0xCC, 1920 * 1080 * 4);
 
         regs = devm_platform_ioremap_resource(pdev, 0);
 
 	writel(DISP0_FORMAT_BGRA, regs + DISP0_FORMAT);
-	writel(dva, regs + DISP0_FRAMEBUFFER_0);
+//	writel(dva, regs + DISP0_FRAMEBUFFER_0);
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
