@@ -15,6 +15,7 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/pm_runtime.h>
 #include <linux/debugfs.h>
+#include <linux/dma-mapping.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -29,6 +30,12 @@
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_vblank.h>
+
+#define DISP0_FORMAT 0x30
+#define    DISP0_FORMAT_BGRA 0x5000
+#define DISP0_FRAMEBUFFER_0 0x54
+#define DISP0_FRAMEBUFFER_1 0x58
+#define DISP0_FRAMEBUFFER_2 0x5c
 
 struct apple_drm_private {
 	struct drm_device	drm;
@@ -226,12 +233,34 @@ static int apple_platform_probe(struct platform_device *pdev)
 	struct drm_crtc *crtc;
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
+	void __iomem *regs;
+	void *framebuffer;
+	dma_addr_t dva;
 	int ret;
 
 	apple = devm_drm_dev_alloc(&pdev->dev, &apple_drm_driver,
 				   struct apple_drm_private, drm);
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
+
+#if 0
+	struct iommu_domain *domain = iommu_get_domain_for_dev(apple->dev);
+	if (!domain)
+		return -ENOMEM;
+#endif
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+
+	if (ret)
+		return ret;
+
+	framebuffer = dma_alloc_coherent(&pdev->dev, 1920 * 1080 * 4, &dva, GFP_KERNEL);
+
+	memset(framebuffer, 0xCC, 1920 * 1080 * 4);
+
+        regs = devm_platform_ioremap_resource(pdev, 0);
+
+	writel(DISP0_FORMAT_BGRA, regs + DISP0_FORMAT);
+	writel(dva, regs + DISP0_FRAMEBUFFER_0);
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
