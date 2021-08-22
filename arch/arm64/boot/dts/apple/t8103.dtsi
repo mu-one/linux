@@ -96,40 +96,6 @@
 		};
 	};
 
-	disp_dart: dart@231304000 {
-		compatible = "apple,t8103-dart";
-		reg = <0x2 0x31304000 0x0 0x4000>;
-		#iommu-cells = <1>;
-		interrupt-parent = <&aic>;
-		interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
-	};
-
-/*
-	dcp_dart: dart@23130c000 {
-		compatible = "apple,t8103-dart";
-		reg = <0x2 0x3130c000 0x0 0x4000>;
-		#iommu-cells = <1>;
-		interrupt-parent = <&aic>;
-		interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
-	};*/
-
-	dcp_mbox: mbox@231c00000 {
-		compatible = "apple,t8103-dcp-mailbox";
-		reg = <0x2 0x31c00000 0x0 0x20000>;
-		reg-names = "mbox";
-		interrupt-parent = <&aic>;
-		interrupts = <AIC_IRQ 427 IRQ_TYPE_LEVEL_HIGH>, <AIC_IRQ 430 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-names = "can-send", "can-recv";
-		#mbox-cells = <1>;
-	};
-
-	display-subsystem {
-		compatible = "apple,t8103-dcp";
-		mboxes = <&dcp_mbox 32>;
-		//iommus = <&disp_dart 0>, <&dcp_dart 1>;
-		iommus = <&disp_dart 0>;
-	};
-
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupt-parent = <&aic>;
@@ -155,6 +121,41 @@
 		ranges;
 		dma-ranges;
 		nonposted-mmio;
+
+		disp_dart: dart@231304000 {
+			compatible = "apple,t8103-dart";
+			reg = <0x2 0x31304000 0x0 0x4000>;
+			#iommu-cells = <1>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+/*
+		dcp_dart: dart@23130c000 {
+			compatible = "apple,t8103-dart";
+			reg = <0x2 0x3130c000 0x0 0x4000>;
+			#iommu-cells = <1>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		dcp_mbox: mbox@231c00000 {
+			compatible = "apple,t8103-dcp-mailbox";
+			reg = <0x2 0x31c00000 0x0 0x20000>;
+			reg-names = "mbox";
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 427 IRQ_TYPE_LEVEL_HIGH>, <AIC_IRQ 430 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "can-send", "can-recv";
+			#mbox-cells = <1>;
+		};
+*/
+
+		display-subsystem {
+			compatible = "apple,t8103-dcp";
+//			mboxes = <&dcp_mbox 32>;
+//			iommus = <&disp_dart 0>, <&dcp_dart 1>;
+			iommus = <&disp_dart 0>;
+		};
 
 		serial0: serial@235200000 {
 			compatible = "apple,s5l-uart";
