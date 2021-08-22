@@ -17,6 +17,7 @@
 #include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
 
+#include <drm/drm_aperture.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
@@ -40,6 +41,9 @@ struct apple_drm_private {
 	struct drm_device	drm;
 	void __iomem		*regs;
 };
+
+#define to_apple_drm_private(x) \
+	container_of(x, struct apple_drm_private, drm)
 
 DEFINE_DRM_GEM_CMA_FOPS(apple_fops);
 
@@ -77,6 +81,7 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 	/* STUB */
 	printk("Updating atomic plane");
 
+	struct apple_drm_private *apple = to_apple_drm_private(plane->dev);
 	struct drm_plane_state *plane_state;
 	struct drm_framebuffer *fb;
 	struct drm_gem_shmem_object *obj;
@@ -87,6 +92,8 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 	fb = plane_state->fb;
 
 	dva = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
+//	writel(dva, apple->regs + DISP0_FRAMEBUFFER_0);
+	writel(DISP0_FORMAT_BGRA, apple->regs + DISP0_FORMAT);
 	printk("Address %X\n", dva);
 
 #if 0
@@ -284,9 +291,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	struct drm_crtc *crtc;
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
-	void __iomem *regs;
-	void *framebuffer;
-	dma_addr_t dva;
 	int ret;
 
 	apple = devm_drm_dev_alloc(&pdev->dev, &apple_drm_driver,
@@ -306,15 +310,29 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	printk("set contig");
 
+#if 0
 	framebuffer = dma_alloc_coherent(&pdev->dev, 1920 * 1080 * 4, &dva, GFP_KERNEL);
 
 	printk("framebuffer %p dva %X", framebuffer, (uint32_t) dva);
 	memset(framebuffer, 0xCC, 1920 * 1080 * 4);
+#endif
 
-        regs = devm_platform_ioremap_resource(pdev, 0);
+        apple->regs = devm_platform_ioremap_resource(pdev, 0);
 
-	writel(DISP0_FORMAT_BGRA, regs + DISP0_FORMAT);
+	if (!apple->regs)
+		return -ENODEV;
+
+//	writel(DISP0_FORMAT_BGRA, regs + DISP0_FORMAT);
 //	writel(dva, regs + DISP0_FRAMEBUFFER_0);
+
+
+	/*
+	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
+	 * located anywhere in RAM
+	 */
+	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
+	if (ret)
+		return ret;
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
