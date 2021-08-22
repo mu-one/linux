@@ -29,7 +29,6 @@
 #include <drm/drm_modeset_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
-#include <drm/drm_vblank.h>
 
 #define DISP0_FORMAT 0x30
 #define    DISP0_FORMAT_BGRA 0x5000
@@ -218,13 +217,11 @@ static void apple_crtc_atomic_enable(struct drm_crtc *crtc,
 				     struct drm_atomic_state *state)
 {
 	printk("atomic_enable");
-	drm_crtc_vblank_on(crtc);
 }
 
 static void apple_crtc_atomic_disable(struct drm_crtc *crtc,
 				      struct drm_atomic_state *state)
 {
-	drm_crtc_vblank_off(crtc);
 	printk("atomic_disable");
 }
 
