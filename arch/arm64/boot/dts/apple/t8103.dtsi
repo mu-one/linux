@@ -96,8 +96,19 @@
 		};
 	};
 
+	dcp_mbox: mbox@23e400000 {
+		compatible = "apple,t8103-dcp-mailbox";
+		reg = <0x2 0x31C00000 0x0 0x20000>;
+		reg-names = "mbox";
+		interrupt-parent = <&aic>;
+		interrupts = <AIC_IRQ 427 IRQ_TYPE_LEVEL_HIGH>, <AIC_IRQ 430 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "can-send", "can-recv";
+		#mbox-cells = <1>;
+	};
+
 	display-subsystem {
-		compatible = "apple,m1-dcp";
+		compatible = "apple,t8103-dcp";
+		mboxes = <&dcp_mbox 32>;
 	};
 
 	timer {
