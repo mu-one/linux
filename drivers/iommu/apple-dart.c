@@ -658,12 +658,11 @@ static int apple_dart_attach_dev(struct iommu_domain *domain,
 	struct apple_dart_stream_map *stream_map;
 	struct apple_dart_master_cfg *cfg = dev_iommu_priv_get(dev);
 	struct apple_dart_domain *dart_domain = to_dart_domain(domain);
+	struct apple_dart *dart0 = cfg->stream_maps[0].dart;
 
-	if (cfg->stream_maps[0].dart->force_bypass &&
-	    domain->type != IOMMU_DOMAIN_IDENTITY)
+	if (dart0->force_bypass && domain->type != IOMMU_DOMAIN_IDENTITY)
 		return -EINVAL;
-	if (!cfg->stream_maps[0].dart->supports_bypass &&
-	    domain->type == IOMMU_DOMAIN_IDENTITY)
+	if (!dart0->supports_bypass && domain->type == IOMMU_DOMAIN_IDENTITY)
 		return -EINVAL;
 
 	ret = apple_dart_finalize_domain(domain, cfg);
@@ -895,10 +894,11 @@ out:
 static int apple_dart_def_domain_type(struct device *dev)
 {
 	struct apple_dart_master_cfg *cfg = dev_iommu_priv_get(dev);
+	struct apple_dart *dart = cfg->stream_maps[0].dart;
 
-	if (cfg->stream_maps[0].dart->force_bypass)
+	if (dart->force_bypass)
 		return IOMMU_DOMAIN_IDENTITY;
-	if (!cfg->stream_maps[0].dart->supports_bypass)
+	if (dart->supports_bypass)
 		return IOMMU_DOMAIN_DMA;
 
 	return 0;
