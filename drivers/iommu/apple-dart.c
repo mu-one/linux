@@ -197,6 +197,7 @@ struct apple_dart_hw {
  * @pgsize: pagesize supported by this DART
  * @supports_bypass: indicates if this DART supports bypass mode
  * @force_bypass: force bypass mode due to pagesize mismatch?
+ * @locked: indicates if this DART is locked
  * @sid2group: maps stream ids to iommu_groups
  * @iommu: iommu core device
  */
@@ -217,6 +218,7 @@ struct apple_dart {
 	u32 num_streams;
 	u32 supports_bypass : 1;
 	u32 force_bypass : 1;
+	u32 locked : 1;
 
 	struct iommu_group *sid2group[DART_MAX_STREAMS];
 	struct iommu_device iommu;
@@ -1057,6 +1059,11 @@ static int apple_dart_set_bus_ops(const struct iommu_ops *ops)
 	return 0;
 }
 
+static bool apple_dart_is_locked(struct apple_dart *dart)
+{
+	return !!(readl(dart->regs + DART_CONFIG) & DART_CONFIG_LOCK);
+}
+
 static int apple_dart_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -1122,6 +1129,7 @@ static int apple_dart_probe(struct platform_device *pdev)
 	}
 
 	dart->force_bypass = dart->pgsize > PAGE_SIZE;
+	dart->locked = apple_dart_is_locked(dart);
 
 	ret = apple_dart_hw_reset(dart);
 	if (ret)
@@ -1149,8 +1157,8 @@ static int apple_dart_probe(struct platform_device *pdev)
 
 	dev_info(
 		&pdev->dev,
-		"DART [pagesize %x, %d streams, bypass support: %d, bypass forced: %d] initialized\n",
-		dart->pgsize, dart->num_streams, dart->supports_bypass, dart->force_bypass);
+		"DART [pagesize %x, %d streams, bypass support: %d, bypass forced: %d, locked: %d] initialized\n",
+		dart->pgsize, dart->num_streams, dart->supports_bypass, dart->force_bypass, dart->locked);
 	return 0;
 
 err_sysfs_remove:
