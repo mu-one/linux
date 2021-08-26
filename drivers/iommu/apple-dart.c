@@ -450,16 +450,8 @@ apple_dart_t8110_hw_invalidate_tlb(struct apple_dart_stream_map *stream_map)
 
 static int apple_dart_hw_reset(struct apple_dart *dart)
 {
-	u32 config;
 	struct apple_dart_stream_map stream_map;
 	int i;
-
-	config = readl(dart->regs + dart->hw->lock);
-	if (config & dart->hw->lock_bit) {
-		dev_err(dart->dev, "DART is locked down until reboot: %08x\n",
-			config);
-		return -EINVAL;
-	}
 
 	stream_map.dart = dart;
 	bitmap_zero(stream_map.sidmap, DART_MAX_STREAMS);
@@ -1131,7 +1123,9 @@ static int apple_dart_probe(struct platform_device *pdev)
 	dart->force_bypass = dart->pgsize > PAGE_SIZE;
 	dart->locked = apple_dart_is_locked(dart);
 
-	ret = apple_dart_hw_reset(dart);
+	if (!dart->locked)
+		ret = apple_dart_hw_reset(dart);
+
 	if (ret)
 		goto err_clk_disable;
 
