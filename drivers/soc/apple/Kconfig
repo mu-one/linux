@@ -38,5 +38,11 @@ config APPLE_SART
 
 	  Say 'y' here if you have an Apple SoC.
 
+config APPLE_SMC
+	bool "Apple SMC"
+	depends on ARCH_APPLE || COMPILE_TEST
+	default ARCH_APPLE
+	select GENERIC_IRQ_CHIP
+
 endmenu
 endif

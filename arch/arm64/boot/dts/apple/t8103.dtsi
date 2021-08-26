@@ -994,5 +994,33 @@
 			apple,sart = <&sart>;
 			power-domains = <&ps_ans2>;
 		 };
+
+		smc_mbox: mbox@23e408000 {
+			compatible = "apple,t8103-asc-mailbox";
+			reg = <0x2 0x3e408000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 400 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 401 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 402 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 403 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "send-empty", "send-not-empty",
+				"recv-empty", "recv-not-empty";
+			#mbox-cells = <0>;
+		};
+
+		smc: smc@23e400000 {
+			compatible = "apple,t8103-smc";
+			reg = <0x2 0x3e400000 0x0 0x4000>;
+			shmem = <&smc_shmem>;
+			mboxes = <&smc_mbox>;
+			mbox-names = "smc-asc";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
+		smc_shmem: sram@23fe00000 {
+			compatible = "mmio-sram";
+			reg = <0x2 0x3fe00000 0x0 0x100000>;
+		};
 	};
 };
