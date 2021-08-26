@@ -122,6 +122,7 @@
 		dma-ranges;
 		nonposted-mmio;
 
+/*
 		disp_dart: dart@231304000 {
 			compatible = "apple,t8103-dart";
 			reg = <0x2 0x31304000 0x0 0x4000>;
@@ -129,6 +130,7 @@
 			interrupt-parent = <&aic>;
 			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
 		};
+*/
 
 		dcp_dart: dart@23130c000 {
 			compatible = "apple,t8103-dart";
@@ -137,7 +139,6 @@
 			interrupt-parent = <&aic>;
 			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
 		};
-/*
 
 		dcp_mbox: mbox@231c00000 {
 			compatible = "apple,t8103-dcp-mailbox";
@@ -148,8 +149,15 @@
 			interrupt-names = "can-send", "can-recv";
 			#mbox-cells = <1>;
 		};
-*/
 
+		dcp {
+			compatible = "apple,dcp";
+			mboxes = <&dcp_mbox 32>;
+			iommus = <&dcp_dart 0>;
+		};
+
+
+/*
 		display-subsystem {
 			compatible = "apple,t8103-dcp";
 //			mboxes = <&dcp_mbox 32>;
@@ -159,6 +167,7 @@
 			reg = <0x2 0x30850000 0x0 0x4000>;
 			reg-names = "raw";
 		};
+*/
 
 		serial0: serial@235200000 {
 			compatible = "apple,s5l-uart";

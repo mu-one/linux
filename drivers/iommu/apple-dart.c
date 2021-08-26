@@ -467,19 +467,15 @@ static int apple_dart_finalize_domain(struct iommu_domain *domain,
 
 	if (dart->locked) {
 		u32 idx;
-		printk("setting up locked page table\n");
+		phys_addr_t phys;
+		u32 ttbr = readl(dart->regs + DART_TTBR(0, 0));
+		printk("locked pgtbl: ttbr %u = %X\n", idx, ttbr);
+		WARN_ON(!(ttbr & DART_TTBR_VALID));
 
-		for (idx = 0; idx < 4; ++idx) {
-			phys_addr_t phys;
-			u32 ttbr = readl(dart->regs + DART_TTBR(0, idx));
-			printk("ttbr %u = %X\n", idx, ttbr);
-			WARN_ON(!(ttbr & DART_TTBR_VALID));
+		ttbr &= ~DART_TTBR_VALID;
 
-			ttbr &= ~DART_TTBR_VALID;
-
- 			phys = ((phys_addr_t) ttbr) << DART_TTBR_SHIFT;
-			pgtbl_cfg.apple_dart_cfg.ttbr[i] = phys;
-		}
+		phys = ((phys_addr_t) ttbr) << DART_TTBR_SHIFT;
+		pgtbl_cfg.apple_dart_cfg.ttbr[0] = phys;
 	}
 
 	domain->pgsize_bitmap = pgtbl_cfg.pgsize_bitmap;
