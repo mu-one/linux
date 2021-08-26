@@ -10,23 +10,47 @@
 #include <linux/pm_runtime.h>
 #include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
+#include <linux/mailbox_client.h>
 
 struct apple_dcp {
-	void __iomem		*regs;
+	struct mbox_client mbox;
+	struct mbox_chan *chan;
 };
+
+static void dcp_mbox_msg(struct mbox_client *cl, void *msg)
+{
+//	struct apple_dcp *dcp = container_of(cl, struct apple_dcp, mbox);
+	u64 rxmsg = (u64) (uintptr_t) msg;
+	printk("DCP sent %llx\n", rxmsg);
+}
+
 
 static int dcp_platform_probe(struct platform_device *pdev)
 {
+	struct device *dev = &pdev->dev;
 	struct apple_dcp *dcp;
 	int ret;
 
-	dcp = devm_kzalloc(&pdev->dev, sizeof(struct apple_dcp), GFP_KERNEL);
-	if (IS_ERR(dcp))
-		return PTR_ERR(dcp);
+	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
+	if (!dcp)
+		return -ENOMEM;
 
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 
 	dev_info(&pdev->dev, "Probing DCP");
+
+	dcp->mbox.dev = dev;
+	dcp->mbox.rx_callback = dcp_mbox_msg;
+	dcp->mbox.tx_block = true;
+	dcp->mbox.tx_tout = 1000;
+	printf("Requesting a channel\n");
+	dcp->chan = mbox_request_channel(&dcp->mbox, 0);
+	if(IS_ERR(dcp->chan)) {
+		dev_err(&pdev->dev, "failed to attach to mailbox\n");
+		return PTR_ERR(dcp->chan);
+	}
+	printk("Attached to mailbox");
+
 
 	if (ret)
 		return ret;
