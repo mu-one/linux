@@ -10,24 +10,36 @@
 #include <linux/pm_runtime.h>
 #include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
-#include <linux/mailbox_client.h>
+#include <linux/apple-mailbox.h>
+#include <linux/apple-rtkit.h>
+
+#define DCP_ENDPOINT 0x37
 
 struct apple_dcp {
-	struct mbox_client mbox;
-	struct mbox_chan *chan;
+	struct apple_rtkit *rtk;
 };
 
-static void dcp_mbox_msg(struct mbox_client *cl, void *msg)
+static void rtk_got_msg(void *cookie, u8 endpoint, u64 message)
 {
-//	struct apple_dcp *dcp = container_of(cl, struct apple_dcp, mbox);
-	u64 rxmsg = (u64) (uintptr_t) msg;
-	printk("DCP sent %llx\n", rxmsg);
+	printk("DCP: ep %u got %llx\n", endpoint, message);
 }
 
+static int dummy_shmem_verify(void *cookie, dma_addr_t addr, size_t len)
+{
+        return 0;
+}
+
+static struct apple_rtkit_ops rtkit_ops =
+{
+        .shmem_owner = APPLE_RTKIT_SHMEM_OWNER_LINUX,
+        .shmem_verify = dummy_shmem_verify,
+        .recv_message = rtk_got_msg,
+};
 
 static int dcp_platform_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	struct resource *res;
 	struct apple_dcp *dcp;
 	int ret;
 
@@ -39,18 +51,17 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "Probing DCP");
 
-	dcp->mbox.dev = dev;
-	dcp->mbox.rx_callback = dcp_mbox_msg;
-	dcp->mbox.tx_block = true;
-	dcp->mbox.tx_tout = 1000;
-	printf("Requesting a channel\n");
-	dcp->chan = mbox_request_channel(&dcp->mbox, 0);
-	if(IS_ERR(dcp->chan)) {
-		dev_err(&pdev->dev, "failed to attach to mailbox\n");
-		return PTR_ERR(dcp->chan);
-	}
-	printk("Attached to mailbox");
+        res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "coproc");
+        if (!res)
+                return -EINVAL;
+	dev_info(&pdev->dev, "Got regs");
 
+        dcp->rtk = apple_rtkit_init(dev, dcp, res, "mbox", &rtkit_ops);
+	dev_info(&pdev->dev, "Initialized\n");
+	apple_rtkit_boot_wait(dcp->rtk);
+	dev_info(&pdev->dev, "Booted\n");
+	apple_rtkit_start_ep(dcp->rtk, DCP_ENDPOINT);
+	dev_info(&pdev->dev, "Started\n");
 
 	if (ret)
 		return ret;

@@ -141,19 +141,27 @@
 		};
 
 		dcp_mbox: mbox@231c00000 {
-			compatible = "apple,t8103-dcp-mailbox";
-			reg = <0x2 0x31c00000 0x0 0x20000>;
-			reg-names = "mbox";
+			compatible = "apple,t8103-dcp-mailbox",
+				"apple,t8103-asc-mailbox";
+			reg = <0x2 0x31c08000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
-			interrupts = <AIC_IRQ 427 IRQ_TYPE_LEVEL_HIGH>, <AIC_IRQ 430 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "can-send", "can-recv";
-			#mbox-cells = <1>;
+			interrupts = <AIC_IRQ 427 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 428 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 429 IRQ_TYPE_LEVEL_HIGH>,
+				<AIC_IRQ 430 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "send-empty", "send-not-empty",
+				"recv-empty", "recv-not-empty";
+			#mbox-cells = <0>;
 		};
 
 		dcp {
 			compatible = "apple,dcp";
-			mboxes = <&dcp_mbox 0x37>;
+			mboxes = <&dcp_mbox>;
+			mbox-names = "mbox";
 			iommus = <&dcp_dart 0>;
+
+			reg-names = "coproc";
+			reg = <0x2 0x31c00000 0x0 0x4000>;
 		};
 
 
