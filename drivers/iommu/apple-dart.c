@@ -392,12 +392,29 @@ static size_t apple_dart_unmap_pages(struct iommu_domain *domain,
 }
 
 static void
+apple_dart_setup_locked(struct apple_dart_domain *domain,
+			struct apple_dart_stream_map *stream_map)
+{
+//	struct io_pgtable_ops *ops = dart_domain->pgtbl_ops;
+//	struct apple_dart *dart = stream_map->dart;
+//	int sid;
+
+//	for (sid = 0; sid < DART_MAX_STREAMS; ++sid)
+	printk("Stub-- Setup locked\n");
+}
+
+static void
 apple_dart_setup_translation(struct apple_dart_domain *domain,
 			     struct apple_dart_stream_map *stream_map)
 {
 	int i;
 	struct io_pgtable_cfg *pgtbl_cfg =
 		&io_pgtable_ops_to_pgtable(domain->pgtbl_ops)->cfg;
+
+	if (stream_map->dart->locked) {
+		apple_dart_setup_locked(domain, stream_map);
+		return;
+	}
 
 	for (i = 0; i < pgtbl_cfg->apple_dart_cfg.n_ttbrs; ++i)
 		apple_dart_hw_set_ttbr(stream_map, i,
@@ -438,11 +455,31 @@ static int apple_dart_finalize_domain(struct iommu_domain *domain,
 		.iommu_dev = dart->dev,
 	};
 
+	if (dart->locked)
+		pgtbl_cfg.quirks |= IO_PGTABLE_QUIRK_APPLE_LOCKED;
+
 	dart_domain->pgtbl_ops =
 		alloc_io_pgtable_ops(APPLE_DART, &pgtbl_cfg, domain);
 	if (!dart_domain->pgtbl_ops) {
 		ret = -ENOMEM;
 		goto done;
+	}
+
+	if (dart->locked) {
+		u32 idx;
+		printk("setting up locked page table\n");
+
+		for (idx = 0; idx < 4; ++idx) {
+			phys_addr_t phys;
+			u32 ttbr = readl(dart->regs + DART_TTBR(0, idx));
+			printk("ttbr %u = %X\n", idx, ttbr);
+			WARN_ON(!(ttbr & DART_TTBR_VALID));
+
+			ttbr &= ~DART_TTBR_VALID;
+
+ 			phys = ((phys_addr_t) ttbr) << DART_TTBR_SHIFT;
+			pgtbl_cfg.apple_dart_cfg.ttbr[i] = phys;
+		}
 	}
 
 	domain->pgsize_bitmap = pgtbl_cfg.pgsize_bitmap;

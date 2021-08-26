@@ -1144,6 +1144,12 @@ apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 	cfg->apple_dart_cfg.n_ttbrs = 1 << data->pgd_bits;
 	data->pgd_bits += data->bits_per_level;
 
+	/* Locked DARTs reuse the already configured page table */
+	if (cfg->quirks & IO_PGTABLE_QUIRK_APPLE_LOCKED) {
+		data->pgd = ioremap_cache(cfg->apple_dart_cfg.ttbr[0], 0x10000);
+		goto done;
+	}
+
 	data->pgd = __arm_lpae_alloc_pages(ARM_LPAE_PGD_SIZE(data), GFP_KERNEL,
 					   cfg);
 	if (!data->pgd)
@@ -1153,6 +1159,7 @@ apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 		cfg->apple_dart_cfg.ttbr[i] =
 			virt_to_phys(data->pgd + i * ARM_LPAE_GRANULE(data));
 
+done:
 	return &data->iop;
 
 out_free_data:
