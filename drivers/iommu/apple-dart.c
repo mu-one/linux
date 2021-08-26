@@ -198,6 +198,7 @@ apple_dart_hw_enable_translation(struct apple_dart_stream_map *stream_map)
 {
 	int sid;
 
+	WARN_ON(stream_map->dart->locked);
 	for_each_set_bit(sid, &stream_map->sidmap, DART_MAX_STREAMS)
 		writel(DART_TCR_TRANSLATE_ENABLE,
 		       stream_map->dart->regs + DART_TCR(sid));
@@ -207,6 +208,7 @@ static void apple_dart_hw_disable_dma(struct apple_dart_stream_map *stream_map)
 {
 	int sid;
 
+	WARN_ON(stream_map->dart->locked);
 	for_each_set_bit(sid, &stream_map->sidmap, DART_MAX_STREAMS)
 		writel(0, stream_map->dart->regs + DART_TCR(sid));
 }
@@ -216,6 +218,7 @@ apple_dart_hw_enable_bypass(struct apple_dart_stream_map *stream_map)
 {
 	int sid;
 
+	WARN_ON(stream_map->dart->locked);
 	WARN_ON(!stream_map->dart->supports_bypass);
 	for_each_set_bit(sid, &stream_map->sidmap, DART_MAX_STREAMS)
 		writel(DART_TCR_BYPASS0_ENABLE | DART_TCR_BYPASS1_ENABLE,
@@ -227,6 +230,7 @@ static void apple_dart_hw_set_ttbr(struct apple_dart_stream_map *stream_map,
 {
 	int sid;
 
+	WARN_ON(stream_map->dart->locked);
 	WARN_ON(paddr & ((1 << DART_TTBR_SHIFT) - 1));
 	for_each_set_bit(sid, &stream_map->sidmap, DART_MAX_STREAMS)
 		writel(DART_TTBR_VALID | (paddr >> DART_TTBR_SHIFT),
@@ -238,6 +242,7 @@ static void apple_dart_hw_clear_ttbr(struct apple_dart_stream_map *stream_map,
 {
 	int sid;
 
+	WARN_ON(stream_map->dart->locked);
 	for_each_set_bit(sid, &stream_map->sidmap, DART_MAX_STREAMS)
 		writel(0, stream_map->dart->regs + DART_TTBR(sid, idx));
 }
