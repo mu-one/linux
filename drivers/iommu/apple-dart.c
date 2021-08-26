@@ -664,6 +664,8 @@ static int apple_dart_attach_dev(struct iommu_domain *domain,
 		return -EINVAL;
 	if (!dart0->supports_bypass && domain->type == IOMMU_DOMAIN_IDENTITY)
 		return -EINVAL;
+	if (dart0->locked && domain->type != IOMMU_DOMAIN_DMA)
+		return -EINVAL;
 
 	ret = apple_dart_finalize_domain(domain, cfg);
 	if (ret)
