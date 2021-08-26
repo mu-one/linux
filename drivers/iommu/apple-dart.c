@@ -896,8 +896,12 @@ static int apple_dart_def_domain_type(struct device *dev)
 	struct apple_dart_master_cfg *cfg = dev_iommu_priv_get(dev);
 	struct apple_dart *dart = cfg->stream_maps[0].dart;
 
+	WARN_ON(dart->force_bypass && dart->locked);
+
 	if (dart->force_bypass)
 		return IOMMU_DOMAIN_IDENTITY;
+	if (dart->locked)
+		return IOMMU_DOMAIN_DMA;
 	if (dart->supports_bypass)
 		return IOMMU_DOMAIN_DMA;
 
