@@ -14,10 +14,21 @@
 #include <linux/apple-rtkit.h>
 
 #define DCP_ENDPOINT 0x37
+#define DCP_SHMEM_SIZE 0x100000
 
 struct apple_dcp {
 	struct apple_rtkit *rtk;
+
+	/* DCP shared memory */
+	void *shmem;
+	dma_addr_t shmem_iova;
 };
+
+static void
+dcpep_send(struct apple_dcp *dcp, uint64_t msg)
+{
+	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, msg);
+}
 
 static void rtk_got_msg(void *cookie, u8 endpoint, u64 message)
 {
@@ -49,19 +60,26 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 
-	dev_info(&pdev->dev, "Probing DCP");
+	dev_info(dev, "Probing DCP");
 
         res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "coproc");
         if (!res)
                 return -EINVAL;
-	dev_info(&pdev->dev, "Got regs");
+	dev_info(dev, "Got regs");
 
         dcp->rtk = apple_rtkit_init(dev, dcp, res, "mbox", &rtkit_ops);
-	dev_info(&pdev->dev, "Initialized\n");
+	dev_info(dev, "Initialized\n");
 	apple_rtkit_boot_wait(dcp->rtk);
-	dev_info(&pdev->dev, "Booted\n");
+	dev_info(dev, "Booted\n");
 	apple_rtkit_start_ep(dcp->rtk, DCP_ENDPOINT);
-	dev_info(&pdev->dev, "Started\n");
+	dev_info(dev, "Started\n");
+
+	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &dcp->shmem_iova,
+					GFP_KERNEL);
+	dev_info(dev, "shmem allocated at dva %x\n", (u32) dcp->shmem_iova);
+
+	/* DCP SetShmem */
+	dcpep_send(dcp, (((u64) dcp->shmem_iova) << 16) | 0x40);
 
 	if (ret)
 		return ret;
