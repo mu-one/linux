@@ -152,7 +152,7 @@
 
 		dcp {
 			compatible = "apple,dcp";
-			mboxes = <&dcp_mbox 32>;
+			mboxes = <&dcp_mbox 0x37>;
 			iommus = <&dcp_dart 0>;
 		};
 
