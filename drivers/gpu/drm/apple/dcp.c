@@ -144,6 +144,16 @@ static struct apple_rtkit_ops rtkit_ops =
         .recv_message = dcp_got_msg,
 };
 
+static void dcp_setup_context(struct apple_dcp *dcp, enum dcp_context_id id,
+			      u16 start)
+{
+	dcp->contexts[i] = (struct dcp_context) {
+		.dcp = dcp,
+		.buf = dcp->shmem + start,
+		.offset = 0
+	};
+}
+
 static int dcp_platform_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -173,13 +183,11 @@ static int dcp_platform_probe(struct platform_device *pdev)
 					GFP_KERNEL);
 	dev_info(dev, "shmem allocated at dva %x\n", (u32) dcp->shmem_iova);
 
-	for (i = 0; i < ARRAY_SIZE(dcp->contexts); ++i) {
-		dcp->contexts[i] = (struct dcp_context) {
-			.dcp = dcp,
-			.buf = dcp->shmem,
-			.offset = 0
-		};
-	}
+	dcp_setup_context(dcp, DCP_CONTEXT_CB, 0x60000);
+	dcp_setup_context(dcp, DCP_CONTEXT_CMD, 0);
+	dcp_setup_context(dcp, DCP_CONTEXT_ASYNC, 0x40000);
+	dcp_setup_context(dcp, DCP_CONTEXT_OOBCB, 0x68000);
+	dcp_setup_context(dcp, DCP_CONTEXT_OOBCMD, 0x8000);
 
 	dcpep_send(dcp, dcpep_set_shmem(dcp->shmem_iova));
 
