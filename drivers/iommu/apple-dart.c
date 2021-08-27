@@ -442,6 +442,18 @@ static int apple_dart_finalize_domain(struct iommu_domain *domain,
 		.iommu_dev = dart->dev,
 	};
 
+	if (dart->locked) {
+		phys_addr_t phys;
+		u32 ttbr = readl(dart->regs + DART_TTBR(0, 0));
+		WARN_ON(!(ttbr & DART_TTBR_VALID));
+
+		ttbr &= ~DART_TTBR_VALID;
+
+		phys = ((phys_addr_t) ttbr) << DART_TTBR_SHIFT;
+		pgtbl_cfg.apple_dart_cfg.ttbr[0] = phys;
+		pgtbl_cfg.quirks |= IO_PGTABLE_QUIRK_APPLE_LOCKED;
+	}
+
 	dart_domain->pgtbl_ops =
 		alloc_io_pgtable_ops(APPLE_DART, &pgtbl_cfg, domain);
 	if (!dart_domain->pgtbl_ops) {
