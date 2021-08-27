@@ -399,6 +399,10 @@ apple_dart_setup_translation(struct apple_dart_domain *domain,
 	struct io_pgtable_cfg *pgtbl_cfg =
 		&io_pgtable_ops_to_pgtable(domain->pgtbl_ops)->cfg;
 
+	/* Locked DARTs are set up by the bootloader. */
+	if (stream_map->dart->locked)
+		return;
+
 	for (i = 0; i < pgtbl_cfg->apple_dart_cfg.n_ttbrs; ++i)
 		apple_dart_hw_set_ttbr(stream_map, i,
 				       pgtbl_cfg->apple_dart_cfg.ttbr[i]);
