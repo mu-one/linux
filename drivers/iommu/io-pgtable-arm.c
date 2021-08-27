@@ -1115,6 +1115,74 @@ out_free_data:
 	return NULL;
 }
 
+#define DART_PAGE_SIZE 16384
+#define DART_PAGE_ENTRIES (DART_PAGE_SIZE / sizeof(arm_lpae_iopte))
+
+static int
+apple_dart_walk_pages(struct arm_lpae_io_pgtable *data, arm_lpae_iopte *ptep, u64 iova)
+{
+	struct io_pgtable_ops *ops = &data->iop.ops;
+	int i;
+
+	for (i = 0; i < DART_PAGE_ENTRIES; ++i) {
+		int ret = 0;
+		phys_addr_t paddr;
+		size_t mapped;
+
+		if (!(ptep[i] & ARM_LPAE_PTE_VALID))
+			goto increment;
+
+		paddr = iopte_to_paddr(ptep[i], data);
+		//printk("\t%04llX: %08llX\n", iova, paddr);
+
+		ret = ops->map_pages(ops, iova, paddr, DART_PAGE_SIZE, 1,
+			       IOMMU_READ | IOMMU_WRITE | IOMMU_NOEXEC |
+			       IOMMU_CACHE, GFP_KERNEL, &mapped);
+
+		if (ret)
+			return ret;
+increment:
+		iova += DART_PAGE_SIZE;
+	}
+
+	return 0;
+}
+
+static int
+apple_dart_walk_pagetables(struct device *dev,
+			   struct arm_lpae_io_pgtable *data,
+			   arm_lpae_iopte *ptep, int lvl)
+{
+	int i, ret;
+	u64 va = 0;
+
+	for (i = 0; i < DART_PAGE_ENTRIES; ++i) {
+		phys_addr_t paddr;
+		arm_lpae_iopte *sub;
+
+		if (!(ptep[i] & ARM_LPAE_PTE_VALID))
+			goto increment;
+
+		//printk("lvl %d: %X: %08llX\n", lvl, i, ptep[i]);
+		paddr = iopte_to_paddr(ptep[i], data);
+		sub = devm_memremap(dev, paddr, DART_PAGE_SIZE, MEMREMAP_WB);
+
+		if (iopte_leaf(ptep[i], lvl, APPLE_DART)) {
+			ret = apple_dart_walk_pages(data, sub, va);
+
+			if (ret)
+				return ret;
+		} else {
+			apple_dart_walk_pagetables(dev, data, sub, lvl + 1);
+		}
+
+increment:
+		va += DART_PAGE_ENTRIES * DART_PAGE_SIZE;
+	}
+
+	return 0;
+}
+
 static struct io_pgtable *
 apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 {
@@ -1147,18 +1215,30 @@ apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 	data->pgd_bits += data->bits_per_level;
 	size = ARM_LPAE_PGD_SIZE(data);
 
-	/* Locked DARTs reuse the already configured page table. */
-	if (cfg->quirks & IO_PGTABLE_QUIRK_APPLE_LOCKED) {
-		data->pgd = devm_memremap(cfg->iommu_dev,
-					  cfg->apple_dart_cfg.ttbr[0],
-					  size, MEMREMAP_WB);
-		return &data->iop;
-	}
-
 	data->pgd = __arm_lpae_alloc_pages(size, GFP_KERNEL, cfg);
 	if (!data->pgd)
 		goto out_free_data;
 
+	/* Locked DARTs reuse the already configured page table. */
+	if (cfg->quirks & IO_PGTABLE_QUIRK_APPLE_LOCKED) {
+		void *extant = devm_memremap(cfg->iommu_dev,
+					  cfg->apple_dart_cfg.ttbr[0],
+					  size, MEMREMAP_WB);
+
+		/* needed so we can call map() in our walk */
+		data->iop.fmt	= APPLE_DART;
+		data->iop.cookie = cookie;
+		data->iop.cfg	= *cfg;
+
+		/* Copy existing mappings */
+		apple_dart_walk_pagetables(cfg->iommu_dev, data, extant, 0);
+
+		/* Copy new page table over */
+		memcpy(extant, data->pgd, DART_PAGE_SIZE);
+		data->pgd = extant;
+
+		return &data->iop;
+	}
 	for (i = 0; i < cfg->apple_dart_cfg.n_ttbrs; ++i)
 		cfg->apple_dart_cfg.ttbr[i] =
 			virt_to_phys(data->pgd + i * ARM_LPAE_GRANULE(data));
