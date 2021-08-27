@@ -44,6 +44,8 @@ struct apple_rtkit {
 	struct apple_rtkit_shmem ioreport_buffer;
 	struct apple_rtkit_shmem crashlog_buffer;
 
+	bool inited_crashlog;
+
 	struct apple_rtkit_shmem syslog_buffer;
 	char *syslog_msg_buffer;
 	size_t syslog_n_entries;
@@ -278,18 +280,32 @@ static void apple_rtkit_common_rx_get_buffer(struct apple_rtkit *rtk,
 	apple_rtkit_send_message(rtk, ep, reply);
 }
 
+#define DCP_PADDR (0x9e64ce000ull)
+
 static void apple_rtkit_crashlog_rx(struct apple_rtkit *rtk, u64 msg)
 {
 	u8 type = FIELD_GET(APPLE_RTKIT_SYSLOG_TYPE, msg);
+	size_t size = FIELD_GET(APPLE_RTKIT_BUFFER_REQUEST_SIZE, msg) << 12;
+	dma_addr_t iova = FIELD_GET(APPLE_RTKIT_BUFFER_REQUEST_IOVA, msg);
+	phys_addr_t paddr = DCP_PADDR;
 
-	switch (type) {
-	case APPLE_RTKIT_BUFFER_REQUEST:
-		apple_rtkit_common_rx_get_buffer(rtk, &rtk->crashlog_buffer,
-						 APPLE_RTKIT_EP_CRASHLOG, msg);
-		break;
-	default:
+	if (type != APPLE_RTKIT_BUFFER_REQUEST) {
 		rtk_warn("Unknown crashlog message: %llx\n", msg);
+		return;
 	}
+
+	if (!rtk->inited_crashlog) {
+		rtk->inited_crashlog = true;
+		return;
+	}
+
+	rtk_err("DCP crashed! iova %X\n", (u32) iova);
+
+	u32 *data = devm_ioremap_np(rtk->dev, DCP_PADDR, size);
+
+	print_hex_dump(KERN_INFO, "rtkit: ",
+                       DUMP_PREFIX_OFFSET, 16, 1,
+                       data, size, true);
 }
 
 static void apple_rtkit_ioreport_rx(struct apple_rtkit *rtk, u64 msg)
