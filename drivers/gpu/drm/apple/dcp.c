@@ -21,7 +21,6 @@ struct apple_dcp {
 
 	/* DCP shared memory */
 	void *shmem;
-	dma_addr_t shmem_iova;
 
 	/* Active contexts indexed by ID */
 	struct dcp_context contexts[DCP_NUM_CONTEXTS];
@@ -79,8 +78,37 @@ void * dcp_push_packet(struct dcp_context *ctx, char tag[4], u32 in_len,
 	return out + sizeof(header) + in_len;
 }
 
+void dcp_ack(struct dcp_context *ctx)
+{
+	enum dcp_context_id id = dcp_context_get_id(ctx);
+	dcpep_send(ctx->dcp, dcpep_msg(id, 0, 0, true));
+}
+
+
+
+static struct dcp_context *dcp_get_context(struct apple_dcp *dcp,
+					   enum dcp_context_id id)
+{
+	struct dcp_context *ctx;
+
+	if (id >= DCP_NUM_CONTEXTS)
+		return NULL;
+
+	ctx = &dcp->contexts[id];
+
+	if (!ctx->buf)
+		return NULL;
+
+	WARN_ON(ctx->dcp != dcp);
+
+	return ctx;
+}
+
 static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 {
+	struct dcp_context *ctx;
+	void *data;
+
 	bool ack;
 	enum dcp_context_id ctx_id;
 	u16 offset;
@@ -91,8 +119,24 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 	offset = (message & DCPEP_OFFSET_MASK) >> DCPEP_OFFSET_SHIFT;
 	length = (message >> DCPEP_LENGTH_SHIFT);
 
+	ctx = dcp_get_context(dcp, ctx_id);
+
+	if (!ctx) {
+		dev_warn(dcp->dev, "invalid context received %u", ctx_id);
+		return;
+	}
+
+	data = ctx->buf + offset;
+
 	dev_info(dcp->dev, "got %s to context %u offset %u length %u\n",
 		 ack ? "ack" : "message", ctx_id, offset, length);
+
+	print_hex_dump(KERN_INFO, "apple-dcp: ", DUMP_PREFIX_OFFSET, 16, 1,
+			data, length, true);
+
+	if (!ack) {
+		dcp_ack(ctx);
+	}
 }
 
 static void dcp_start_signal(struct apple_dcp *dcp)
@@ -145,9 +189,9 @@ static struct apple_rtkit_ops rtkit_ops =
 };
 
 static void dcp_setup_context(struct apple_dcp *dcp, enum dcp_context_id id,
-			      u16 start)
+			      u32 start)
 {
-	dcp->contexts[i] = (struct dcp_context) {
+	dcp->contexts[id] = (struct dcp_context) {
 		.dcp = dcp,
 		.buf = dcp->shmem + start,
 		.offset = 0
@@ -159,7 +203,8 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct apple_dcp *dcp;
-	int ret, i;
+	dma_addr_t shmem_iova;
+	int ret;
 
 	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
 	if (!dcp)
@@ -179,9 +224,9 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	apple_rtkit_boot_wait(dcp->rtk);
 	apple_rtkit_start_ep(dcp->rtk, DCP_ENDPOINT);
 
-	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &dcp->shmem_iova,
+	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &shmem_iova,
 					GFP_KERNEL);
-	dev_info(dev, "shmem allocated at dva %x\n", (u32) dcp->shmem_iova);
+	dev_info(dev, "shmem allocated at dva %x\n", (u32) shmem_iova);
 
 	dcp_setup_context(dcp, DCP_CONTEXT_CB, 0x60000);
 	dcp_setup_context(dcp, DCP_CONTEXT_CMD, 0);
@@ -189,7 +234,7 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dcp_setup_context(dcp, DCP_CONTEXT_OOBCB, 0x68000);
 	dcp_setup_context(dcp, DCP_CONTEXT_OOBCMD, 0x8000);
 
-	dcpep_send(dcp, dcpep_set_shmem(dcp->shmem_iova));
+	dcpep_send(dcp, dcpep_set_shmem(shmem_iova));
 
 	if (ret)
 		return ret;
