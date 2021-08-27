@@ -17,6 +17,7 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/dma-mapping.h>
+#include <linux/io.h>
 
 #include <asm/barrier.h>
 
@@ -1118,6 +1119,7 @@ static struct io_pgtable *
 apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 {
 	struct arm_lpae_io_pgtable *data;
+	size_t size;
 	int i;
 
 	if (cfg->oas > 36)
@@ -1143,9 +1145,17 @@ apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 	data->start_level = 2;
 	cfg->apple_dart_cfg.n_ttbrs = 1 << data->pgd_bits;
 	data->pgd_bits += data->bits_per_level;
+	size = ARM_LPAE_PGD_SIZE(data);
 
-	data->pgd = __arm_lpae_alloc_pages(ARM_LPAE_PGD_SIZE(data), GFP_KERNEL,
-					   cfg);
+	/* Locked DARTs reuse the already configured page table. */
+	if (cfg->quirks & IO_PGTABLE_QUIRK_APPLE_LOCKED) {
+		data->pgd = devm_memremap(cfg->iommu_dev,
+					  cfg->apple_dart_cfg.ttbr[0],
+					  size, MEMREMAP_WB);
+		return &data->iop;
+	}
+
+	data->pgd = __arm_lpae_alloc_pages(size, GFP_KERNEL, cfg);
 	if (!data->pgd)
 		goto out_free_data;
 
