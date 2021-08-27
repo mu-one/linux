@@ -26,6 +26,8 @@ enum dcp_context_id {
 
 	/* Out-of-band command */
 	DCP_CONTEXT_OOBCMD = 5,
+
+	DCP_NUM_CONTEXTS
 };
 
 /* RTKit endpoint message types */
@@ -55,19 +57,14 @@ enum dcpep_type {
 #define DCPEP_FLAG_SHIFT (4)
 #define DCPEP_FLAG_VALUE (4)
 
-struct apple_dcp {
-	struct device *dev;
-	struct apple_rtkit *rtk;
-
-	/* DCP shared memory */
-	void *shmem;
-	dma_addr_t shmem_iova;
-};
+/* Forward declaration */
+struct apple_dcp;
 
 struct dcp_context {
+	/* Back reference */
+	struct apple_dcp *dcp;
 	uint8_t *buf;
 	uint16_t offset;
-	enum dcp_context_id id;
 };
 
 struct dcp_packet_header {

@@ -15,9 +15,68 @@
 
 #include "dcpep.h"
 
+struct apple_dcp {
+	struct device *dev;
+	struct apple_rtkit *rtk;
+
+	/* DCP shared memory */
+	void *shmem;
+	dma_addr_t shmem_iova;
+
+	/* Active contexts indexed by ID */
+	struct dcp_context contexts[DCP_NUM_CONTEXTS];
+};
+
+static enum dcp_context_id dcp_context_get_id(struct dcp_context *ctx)
+{
+	struct apple_dcp *dcp = ctx->dcp;
+	struct dcp_context *base = &dcp->contexts[0];
+
+	return ctx - base;
+}
+
 static void dcpep_send(struct apple_dcp *dcp, uint64_t msg)
 {
+	dev_info(dcp->dev, "-> %llx\n", msg);
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, msg);
+}
+
+void * dcp_push_packet(struct dcp_context *ctx, char tag[4], u32 in_len,
+		       u32 out_len, void *data, bool ack)
+{
+	struct dcp_packet_header header = {
+		.in_len = in_len,
+		.out_len = out_len,
+
+		/* Tag is reversed due to endianness of the fourcc */
+		.tag[0] = tag[3],
+		.tag[1] = tag[2],
+		.tag[2] = tag[1],
+		.tag[3] = tag[0],
+	};
+
+	enum dcp_context_id id = dcp_context_get_id(ctx);
+	u16 offset = ctx->offset;
+	void *out = ctx->buf + offset;
+
+	void *out_data = out + sizeof(header);
+	size_t data_len = sizeof(header) + in_len + out_len;
+	size_t copy_len = ack ? out_len : in_len;
+
+	if (ack)
+		out_data += in_len;
+
+	memcpy(out, &header, sizeof(header));
+
+	WARN_ON((data == NULL) != (copy_len == 0));
+
+	if (data)
+		memcpy(out_data, data, copy_len);
+
+	dcpep_send(ctx->dcp, dcpep_msg(id, data_len, offset, ack));
+
+	ctx->offset += ALIGN(data_len, DCP_PACKET_ALIGNMENT);
+	return out + sizeof(header) + in_len;
 }
 
 static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
@@ -36,6 +95,15 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 		 ack ? "ack" : "message", ctx_id, offset, length);
 }
 
+static void dcp_start_signal(struct apple_dcp *dcp)
+{
+	struct dcp_context *ctx = &dcp->contexts[DCP_CONTEXT_CMD];
+	uint32_t *resp;
+
+	resp = dcp_push_packet(ctx, "A401", 0, sizeof(resp), NULL, false);
+	printk("Started, resp %u\n", *resp);
+}
+
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 {
 	struct apple_dcp *dcp = cookie;
@@ -43,15 +111,17 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 
 	WARN_ON(endpoint != DCP_ENDPOINT);
 
+	dev_info(dcp->dev, "<- %llx\n", message);
+
 	type = (message >> DCPEP_TYPE_SHIFT) & DCPEP_TYPE_MASK;
 
 	switch (type) {
 	case DCPEP_TYPE_INITIALIZED:
-		printk("DCP initialized! %llx\n", message);
+		dev_info(dcp->dev, "initialized!\n");
+		dcp_start_signal(dcp);
 		break;
 
 	case DCPEP_TYPE_MESSAGE:
-		printk("DCP message %llx\n", message);
 		dcpep_got_msg(dcp, message);
 		break;
 
@@ -79,7 +149,7 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct apple_dcp *dcp;
-	int ret;
+	int ret, i;
 
 	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
 	if (!dcp)
@@ -102,6 +172,14 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &dcp->shmem_iova,
 					GFP_KERNEL);
 	dev_info(dev, "shmem allocated at dva %x\n", (u32) dcp->shmem_iova);
+
+	for (i = 0; i < ARRAY_SIZE(dcp->contexts); ++i) {
+		dcp->contexts[i] = (struct dcp_context) {
+			.dcp = dcp,
+			.buf = dcp->shmem,
+			.offset = 0
+		};
+	}
 
 	dcpep_send(dcp, dcpep_set_shmem(dcp->shmem_iova));
 
