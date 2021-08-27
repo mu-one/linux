@@ -13,26 +13,53 @@
 #include <linux/apple-mailbox.h>
 #include <linux/apple-rtkit.h>
 
-#define DCP_ENDPOINT 0x37
-#define DCP_SHMEM_SIZE 0x100000
+#include "dcpep.h"
 
-struct apple_dcp {
-	struct apple_rtkit *rtk;
-
-	/* DCP shared memory */
-	void *shmem;
-	dma_addr_t shmem_iova;
-};
-
-static void
-dcpep_send(struct apple_dcp *dcp, uint64_t msg)
+static void dcpep_send(struct apple_dcp *dcp, uint64_t msg)
 {
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, msg);
 }
 
-static void rtk_got_msg(void *cookie, u8 endpoint, u64 message)
+static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 {
-	printk("DCP: ep %u got %llx\n", endpoint, message);
+	bool ack;
+	enum dcp_context_id ctx_id;
+	u16 offset;
+	u32 length;
+
+	ack = message & BIT(DCPEP_ACK_SHIFT);
+	ctx_id = (message & DCPEP_CONTEXT_MASK) >> DCPEP_CONTEXT_SHIFT;
+	offset = (message & DCPEP_OFFSET_MASK) >> DCPEP_OFFSET_SHIFT;
+	length = (message >> DCPEP_LENGTH_SHIFT);
+
+	dev_info(dcp->dev, "got %s to context %u offset %u length %u\n",
+		 ack ? "ack" : "message", ctx_id, offset, length);
+}
+
+static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
+{
+	struct apple_dcp *dcp = cookie;
+	enum dcpep_type type;
+
+	WARN_ON(endpoint != DCP_ENDPOINT);
+
+	type = (message >> DCPEP_TYPE_SHIFT) & DCPEP_TYPE_MASK;
+
+	switch (type) {
+	case DCPEP_TYPE_INITIALIZED:
+		printk("DCP initialized! %llx\n", message);
+		break;
+
+	case DCPEP_TYPE_MESSAGE:
+		printk("DCP message %llx\n", message);
+		dcpep_got_msg(dcp, message);
+		break;
+
+	default:
+		dev_warn(dcp->dev, "Ignoring unknown type %u in message %llx\n",
+			 type, message);
+		return;
+	}
 }
 
 static int dummy_shmem_verify(void *cookie, dma_addr_t addr, size_t len)
@@ -44,7 +71,7 @@ static struct apple_rtkit_ops rtkit_ops =
 {
         .shmem_owner = APPLE_RTKIT_SHMEM_OWNER_LINUX,
         .shmem_verify = dummy_shmem_verify,
-        .recv_message = rtk_got_msg,
+        .recv_message = dcp_got_msg,
 };
 
 static int dcp_platform_probe(struct platform_device *pdev)
@@ -58,28 +85,25 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	if (!dcp)
 		return -ENOMEM;
 
-	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
+	platform_set_drvdata(pdev, dcp);
 
-	dev_info(dev, "Probing DCP");
+	dcp->dev = dev;
+
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 
         res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "coproc");
         if (!res)
                 return -EINVAL;
-	dev_info(dev, "Got regs");
 
         dcp->rtk = apple_rtkit_init(dev, dcp, res, "mbox", &rtkit_ops);
-	dev_info(dev, "Initialized\n");
 	apple_rtkit_boot_wait(dcp->rtk);
-	dev_info(dev, "Booted\n");
 	apple_rtkit_start_ep(dcp->rtk, DCP_ENDPOINT);
-	dev_info(dev, "Started\n");
 
 	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &dcp->shmem_iova,
 					GFP_KERNEL);
 	dev_info(dev, "shmem allocated at dva %x\n", (u32) dcp->shmem_iova);
 
-	/* DCP SetShmem */
-	dcpep_send(dcp, (((u64) dcp->shmem_iova) << 16) | 0x40);
+	dcpep_send(dcp, dcpep_set_shmem(dcp->shmem_iova));
 
 	if (ret)
 		return ret;
@@ -89,7 +113,10 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 static int dcp_platform_remove(struct platform_device *pdev)
 {
-	printk("removing dcp\n");
+#if 0
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+	apple_rtkit_free(dcp->rtk);
+#endif
 	return 0;
 }
 
