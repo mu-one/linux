@@ -442,6 +442,27 @@ static int apple_dart_finalize_domain(struct iommu_domain *domain,
 		.iommu_dev = dart->dev,
 	};
 
+	if (dart->locked) {
+		unsigned long sidmap;
+		int sid;
+		phys_addr_t phys;
+		u32 ttbr;
+
+		/* Locked DARTs can only have a single stream bound */
+		sidmap = cfg->stream_maps[0].sidmap;
+		sid = fls64(sidmap) - 1;
+
+		WARN_ON((sid < 0) || (sidmap != BIT(sid)));
+		ttbr = readl(dart->regs + DART_TTBR(sid, 0));
+
+		WARN_ON(!(ttbr & DART_TTBR_VALID));
+		ttbr &= ~DART_TTBR_VALID;
+
+		phys = ((phys_addr_t) ttbr) << DART_TTBR_SHIFT;
+		pgtbl_cfg.apple_dart_cfg.ttbr[0] = phys;
+		pgtbl_cfg.quirks |= IO_PGTABLE_QUIRK_APPLE_LOCKED;
+	}
+
 	dart_domain->pgtbl_ops =
 		alloc_io_pgtable_ops(APPLE_DART, &pgtbl_cfg, domain);
 	if (!dart_domain->pgtbl_ops) {
@@ -851,6 +872,9 @@ static int apple_dart_probe(struct platform_device *pdev)
 		return ret;
 
 	dart->locked = apple_dart_is_locked(dart);
+
+	if (of_get_property(dev->of_node, "apple,force-locked", NULL))
+		dart->locked = true;
 
 	if (!dart->locked)
 		ret = apple_dart_hw_reset(dart);
