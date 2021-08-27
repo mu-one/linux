@@ -31,4 +31,12 @@ properties:
       Identifies the node as an MSI controller.
     $ref: /schemas/types.yaml#/definitions/flag
 
+  msi-ranges:
+    description:
+      A list of pairs <intid span>, where "intid" is the specification
+      of the first interrupt (including the phandle for the interrupt
+      controller) that can be used as an MSI, and "span" the size of
+      that range. Multiple ranges can be provided.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+
 additionalProperties: true
