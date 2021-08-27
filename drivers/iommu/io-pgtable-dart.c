@@ -593,6 +593,24 @@ apple_dart_alloc_pgtable(struct io_pgtable_cfg *cfg, void *cookie)
 	cfg->apple_dart_cfg.n_ttbrs = 1 << data->pgd_bits;
 	data->pgd_bits += data->bits_per_level;
 
+	/* Locked DARTs can not modify the TTBR registers. The known locked
+	 * DARTs (dcp, dcpext0) use just a single TTBR so we do not have to
+	 * worry whether the pages are consecutive.
+	 */
+	if (cfg->quirks & IO_PGTABLE_QUIRK_APPLE_LOCKED) {
+		if (cfg->apple_dart_cfg.n_ttbrs > 1)
+			goto out_free_data;
+
+		data->pgd = devm_memremap(cfg->iommu_dev,
+					  cfg->apple_dart_cfg.ttbr[0],
+					  size, MEMREMAP_WB);
+		if (!data->pgd)
+			goto out_free_data;
+		/* start with an empty table */
+		memset(data->pgd, 0, size);
+		return &data->iop;
+	}
+
 	data->pgd = __dart_alloc_pages(DART_PGD_SIZE(data), GFP_KERNEL,
 					   cfg);
 	if (!data->pgd)
