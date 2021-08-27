@@ -1269,6 +1269,13 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/iommu/apple,dart.yaml
 F:	drivers/iommu/apple-dart.c
 
+APPLE DRM DISPLAY DRIVER
+M:	Alyssa Rosenzweig <alyssa@rosenzweig.io>
+L:	dri-devel@lists.freedesktop.org
+S:	Maintained
+T:	git git://anongit.freedesktop.org/drm/drm-misc
+F:	drivers/gpu/drm/apple/
+
 APPLE PCIE CONTROLLER DRIVER
 M:	Alyssa Rosenzweig <alyssa@rosenzweig.io>
 L:	linux-pci@vger.kernel.org
