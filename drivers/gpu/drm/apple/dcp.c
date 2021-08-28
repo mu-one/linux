@@ -389,6 +389,13 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dma_addr_t shmem_iova;
 	int ret;
 
+	BUILD_BUG_ON(sizeof(struct dcp_rect) != 0x10);
+	BUILD_BUG_ON(sizeof(struct dcp_iouserclient) != 0x10);
+	BUILD_BUG_ON(sizeof(struct dcp_iomfbswaprec) != 0x274);
+	BUILD_BUG_ON(sizeof(struct dcp_plane_info) != 0x50);
+	BUILD_BUG_ON(sizeof(struct dcp_component_types) != 0x8);
+	BUILD_BUG_ON(sizeof(struct dcp_iosurface) != 0x204);
+
 	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
 	if (!dcp)
 		return -ENOMEM;

@@ -96,4 +96,92 @@ dcpep_msg(enum dcp_context_id id, uint32_t length, uint16_t offset, bool ack)
 		((uint64_t) length << DCPEP_LENGTH_SHIFT);
 }
 
+/* Structures used in v11.4 firmware (TODO: versioning as these change) */
+
+#define SWAP_SURFACES 3
+#define MAX_PLANES 3
+
+struct dcp_iouserclient {
+	/* Handle for the IOUserClient. macOS sets this to a kernel VA. */
+	u64 handle;
+	u32 unk;
+	u32 flags;
+} __packed;
+
+struct dcp_rect {
+	u32 x;
+	u32 y;
+	u32 w;
+	u32 h;
+} __packed;
+
+struct dcp_iomfbswaprec {
+	u64 unk0[8];
+	u64 flags1;
+	u64 flags2;
+
+	u32 swap_id;
+
+	u32 surf_ids[SWAP_SURFACES];
+	struct dcp_rect src_rect[SWAP_SURFACES];
+	u32 surf_flags[SWAP_SURFACES];
+	u32 surf_unk[SWAP_SURFACES];
+	struct dcp_rect dst_rect[SWAP_SURFACES];
+	u32 swap_enabled;
+	u32 swap_completed;
+
+	u32 unk1[101];
+} __packed;
+
+/* Information describing a plane of a planar compressed surface */
+struct dcp_plane_info {
+	u32 width;
+	u32 height;
+	u32 base;
+	u32 offset;
+	u32 stride;
+	u32 size;
+	u16 tile_size;
+	u8 tile_w;
+	u8 tile_h;
+	u32 unk[13];
+} __packed;
+
+struct dcp_component_types {
+	u8 count;
+	u8 types[7];
+} __packed;
+
+/* Information describing a surface */
+struct dcp_iosurface {
+	u8 is_tiled;
+	u8 unk_1;
+	u8 unk_2;
+	u32 plane_cnt;
+	u32 plane_cnt2;
+	char format[4]; /* DCP fourcc */
+	u32 unk_f;
+	u8 unk_13;
+	u8 unk_14;
+	u32 stride;
+	u16 pix_size;
+	u8 pel_w;
+	u8 pel_h;
+	u32 offset;
+	u32 width;
+	u32 height;
+	u32 buf_size;
+	u32 unk_2d;
+	u32 unk_31;
+	u32 surface_id;
+	struct dcp_component_types comp_types[MAX_PLANES];
+	u64 has_comp;
+	struct dcp_plane_info planes[MAX_PLANES];
+	u64 has_planes;
+	u32 compression_info[MAX_PLANES][13];
+	u64 has_compr_info;
+	u64 unk_1f5;
+	u8 padding[7];
+} __packed;
+
 #endif
