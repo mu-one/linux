@@ -4,16 +4,24 @@
 #include <linux/module.h>
 #include <linux/clk.h>
 #include <linux/component.h>
+#include <linux/slab.h>
 #include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/pm_runtime.h>
 #include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
+#include <linux/align.h>
 #include <linux/apple-mailbox.h>
 #include <linux/apple-rtkit.h>
 
 #include "dcpep.h"
+
+#define DISP0_FORMAT 0x30
+#define    DISP0_FORMAT_BGRA 0x5000
+#define DISP0_FRAMEBUFFER_0 0x54
+#define DISP0_FRAMEBUFFER_1 0x58
+#define DISP0_FRAMEBUFFER_2 0x5c
 
 struct apple_dcp;
 
@@ -41,8 +49,13 @@ struct apple_dcp {
 	/* DCP shared memory */
 	void *shmem;
 
+	/* Number of memory mappings made by the DCP, used as an ID */
+	u32 nr_mappings;
+
 	struct dcp_call_channel ch_cmd;
 	struct dcp_callback_channel ch_cb;
+
+	u32 surf_iova;
 };
 
 static void dcpep_send(struct apple_dcp *dcp, uint64_t msg)
@@ -70,8 +83,12 @@ void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 	u16 offset = (depth > 0) ? ch->end[depth - 1] : 0;
 	void *out = dcp->shmem + offset; // TODO: OOB CMD
 
+
 	void *out_data = out + sizeof(header);
 	size_t data_len = sizeof(header) + in_len + out_len;
+
+	print_hex_dump(KERN_INFO, "apple-dcp: ", DUMP_PREFIX_OFFSET,
+				16, 1, data, in_len, true);
 
 	memcpy(out, &header, sizeof(header));
 
@@ -137,6 +154,143 @@ static bool HACK_should_hexdump(int tag)
 	}
 }
 
+static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
+{
+	return true;
+}
+
+static bool dcpep_cb_zero(struct apple_dcp *dcp, void *out, void *in)
+{
+	u32 *resp = out;
+
+	*resp = 0;
+	return true;
+}
+
+struct dcp_get_uint_prop_req {
+	char obj[4];
+	char key[0x40];
+	u64 value;
+	u8 value_null;
+	u8 padding[3];
+} __packed;
+
+struct dcp_get_uint_prop_resp {
+	u64 value;
+	u8 ret;
+	u8 padding[3];
+} __packed;
+
+static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
+{
+	struct dcp_get_uint_prop_resp *resp = out;
+	struct dcp_get_uint_prop_req *req = in;
+
+	char obj[4 + 1] = { 0 };
+	char key[0x40 + 1] = { 0 };
+
+	memcpy(obj, req->obj, sizeof(req->obj));
+	memcpy(key, req->key, sizeof(req->key));
+
+	dev_info(dcp->dev, "ignoring property request %s:%s\n", obj, key);
+
+	resp->value = 0;
+	return true;
+}
+
+struct dcp_map_physical_req {
+	u64 paddr;
+	u64 size;
+	u32 flags;
+	u8 dva_null;
+	u8 dva_size;
+	u8 padding[2];
+} __packed;
+
+struct dcp_map_physical_resp {
+	u64 dva;
+	u64 dva_size;
+	u32 mem_desc_id;
+} __packed;
+
+#define DART_PAGE_SIZE (16384)
+
+static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
+{
+	struct dcp_map_physical_resp *resp = out;
+	struct dcp_map_physical_req *req = in;
+
+	resp->dva_size = ALIGN(req->size, DART_PAGE_SIZE);
+	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size, DMA_BIDIRECTIONAL, 0);
+	resp->mem_desc_id = ++dcp->nr_mappings;
+
+	WARN_ON(resp->mem_desc_id == 0);
+
+	/* XXX: need to validate the DCP is allowed to access */
+	dev_warn(dcp->dev, "dangerously mapping phys addr %llx size %llx flags %x to dva %X\n", req->paddr, req->size, req->flags, (u32) resp->dva);
+	return true;
+}
+
+/* Pixel clock frequency in Hz. This is 533.333328 Mhz, factored as 33.333333
+ * MHz * 16. Slightly greater than the 4K@60 VGA pixel clock 533.250 MHz. */
+#define DCP_CLOCK_FREQUENCY (533333328)
+
+static bool dcpep_cb_get_frequency(struct apple_dcp *dcp, void *out, void *in)
+{
+	u64 *frequency = out;
+
+	*frequency = DCP_CLOCK_FREQUENCY;
+	return true;
+}
+
+struct dcp_map_reg_req {
+	char obj[4];
+	u32 index;
+	u32 flags;
+	u8 addr_null;
+	u8 length_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_map_reg_resp {
+	u64 addr;
+	u64 length;
+	u32 ret;
+} __packed;
+
+static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
+{
+	struct dcp_map_reg_resp *resp = out;
+	struct dcp_map_reg_req *req = in;
+
+	/*
+	 * XXX: values extracted from the Apple device tree
+	 * TODO: don't hardcode, get this from Linux device tree
+	 */
+	struct dcp_map_reg_resp registers[] = {
+		{ 0x230000000, 0x3e8000 },
+		{ 0x231320000, 0x4000 },
+		{ 0x231344000, 0x4000 },
+		{ 0x231800000, 0x800000 },
+		{ 0x23b3d0000, 0x4000 },
+		{ 0x23b738000, 0x1000 },
+		{ 0x23bc3c000, 0x1000 },
+	};
+
+	struct dcp_map_reg_resp error = {
+		.ret = 1
+	};
+
+	if (req->index >= ARRAY_SIZE(registers)) {
+		dev_warn(dcp->dev, "attempted to read invalid register index %u", req->index);
+		*resp = error;
+	} else {
+		*resp = registers[req->index];
+	}
+
+	return true;
+}
+
 /* A number of callbacks of the form `bool cb()` can be tied to a constant. */
 
 static bool dcpep_cb_true(struct apple_dcp *dcp, void *out, void *in)
@@ -159,9 +313,44 @@ static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
 #define SETUP_VIDEO_LIMITS "A029"
 #define SET_CREATE_DFB "A357"
 #define START_SIGNAL "A401"
+#define SWAP_START "A407"
+#define SWAP_SUBMIT "A408"
 #define CREATE_DEFAULT_FB "A442"
 #define SET_DISPLAY_REFRESH_PROPERTIES "A459"
 #define FLUSH_SUPPORTS_POWER "A462"
+
+struct dcp_swap_start_req {
+	u32 swap_id;
+	struct dcp_iouserclient client;
+	u8 swap_id_null;
+	u8 client_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_swap_start_resp {
+	u32 swap_id;
+	struct dcp_iouserclient client;
+	u32 ret;
+} __packed;
+
+struct dcp_swap_submit_req {
+	struct dcp_iomfbswaprec swap_rec;
+	struct dcp_iosurface surf[SWAP_SURFACES];
+	u32 surf_iova[SWAP_SURFACES];
+	u8 unkbool;
+	u64 unkdouble;
+	u32 unkint;
+	u8 swap_rec_null;
+	u8 surf_null[SWAP_SURFACES];
+	u8 unkoutbool_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_swap_submit_resp {
+	u8 unkoutbool;
+	u32 ret;
+	u8 padding[3];
+} __packed;
 
 /* Returns success */
 
@@ -176,22 +365,22 @@ static void boot_done(struct apple_dcp *dcp, void *out)
 
 static void boot_5(struct apple_dcp *dcp, void *out)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB,
-		 SET_DISPLAY_REFRESH_PROPERTIES, 0, sizeof(u8), NULL,
-		 boot_done);
+	dcp_push(dcp, DCP_CONTEXT_CB, SET_DISPLAY_REFRESH_PROPERTIES, 0,
+		 sizeof(u8), NULL, boot_done);
 }
 
 static void boot_4(struct apple_dcp *dcp, void *out)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB,
-		 LATE_INIT_SIGNAL, 0, sizeof(u8), NULL, boot_5);
+	dcp_push(dcp, DCP_CONTEXT_CB, LATE_INIT_SIGNAL, 0, sizeof(u8), NULL,
+		 boot_5);
 }
 
 static void boot_3(struct apple_dcp *dcp, void *out)
 {
 	u8 v_true = 1;
 
-	dcp_push(dcp, DCP_CONTEXT_CB, FLUSH_SUPPORTS_POWER, sizeof(v_true), 0, &v_true, boot_4);
+	dcp_push(dcp, DCP_CONTEXT_CB, FLUSH_SUPPORTS_POWER, sizeof(v_true), 0,
+		 &v_true, boot_4);
 }
 
 static void boot_2(struct apple_dcp *dcp, void *out)
@@ -205,6 +394,23 @@ static bool dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
 	return false;
 }
 
+static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *in)
+{
+	uint8_t blob[] = {
+		0x6C, 0x43, 0x6C, 0x6F, 0x63, 0x6B, 0x00, 0x44, 0x14, 0x80,
+		0x73, 0x3B, 0x02, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xC3, 0x3B,
+		0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x90, 0x26, 0xFB, 0x43,
+		0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x65, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+
+	BUILD_BUG_ON(sizeof(blob) != 0x3C);
+
+	memcpy(out, blob, sizeof(blob));
+	return true;
+}
+
 #define DCPEP_MAX_CB (1000)
 
 /* Represents a single callback. Name is for debug only. */
@@ -215,14 +421,50 @@ struct dcpep_cb {
 };
 
 struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
+	[0] = {"did_boot_signal", dcpep_cb_true },
+	[1] = {"did_power_on_signal", dcpep_cb_true },
+	[2] = {"will_power_off_signal", dcpep_cb_true },
+	[3] = {"rt_bandwidth_setup_ap", dcpep_cb_rt_bandwidth_setup },
+
+	[100] = {"match_pmu_service", dcpep_cb_nop },
+	[101] = {"get_display_default_stride", dcpep_cb_zero },
+	[103] = {"set_boolean_property", dcpep_cb_nop },
+	[106] = {"remove_property", dcpep_cb_nop },
 	[107] = {"create_provider_service", dcpep_cb_true },
 	[108] = {"create_product_service", dcpep_cb_true },
 	[109] = {"create_pmu_service", dcpep_cb_true },
 	[110] = {"create_iomfb_service", dcpep_cb_true },
 	[111] = {"create_backlight_service", dcpep_cb_false },
+	[121] = {"set_dcpav_prop_start", dcpep_cb_true },
+	[122] = {"set_dcpav_prop_chunk", dcpep_cb_true },
+	[123] = {"set_dcpav_prop_end", dcpep_cb_true },
 	[116] = {"start_hardware_boot", dcpep_cb_boot_1 },
+
 	[206] = {"match_pmu_service_2", dcpep_cb_true },
 	[207] = {"match_backlight_service", dcpep_cb_true },
+
+	[300] = {"pr_publish", dcpep_cb_nop },
+
+	[401] = {"sr_get_uint_prop", dcpep_cb_get_uint_prop },
+	[408] = {"sr_get_clock_frequency", dcpep_cb_get_frequency },
+	[411] = {"sr_map_device_memory_with_index", dcpep_cb_map_reg },
+	[413] = {"sr_set_property_dict", dcpep_cb_true },
+	[414] = {"sr_set_property_int", dcpep_cb_true },
+	[415] = {"sr_set_property_bool", dcpep_cb_true },
+
+	[452] = {"map_physical", dcpep_cb_map_physical },
+
+	[552] = {"set_property_dict_0", dcpep_cb_true },
+	[561] = {"set_property_dict", dcpep_cb_true },
+	[563] = {"set_property_int", dcpep_cb_true },
+	[565] = {"set_property_bool", dcpep_cb_true },
+	[567] = {"set_property_str", dcpep_cb_true },
+	[574] = {"power_up_dart", dcpep_cb_zero },
+	[576] = {"hotplug_notify_gated", dcpep_cb_nop },
+	[577] = {"powerstate_notify", dcpep_cb_nop },
+	[589] = {"swap_complete_ap_gated", dcpep_cb_nop },
+	[591] = {"swap_complete_intent_gated", dcpep_cb_nop },
+	[598] = {"find_swap_function_gated", dcpep_cb_nop },
 };
 
 static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context, void *data, u32 length)
@@ -293,6 +535,9 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 	WARN_ON(ch->depth == 0);
 	ch->depth--;
 
+	if (!ch->callbacks[ch->depth])
+		return;
+
 	ch->callbacks[ch->depth](dcp, data + sizeof(*header) + header->in_len);
 }
 
@@ -329,11 +574,71 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 		dcpep_handle_cb(dcp, ctx_id, data, length);
 }
 
+static void dcp_swap_started(struct apple_dcp *dcp, void *data)
+{
+	struct dcp_swap_start_resp *resp = data;
+	u32 surf_id = 3; // XXX
+
+	struct dcp_iomfbswaprec swap_rec = {
+		.swap_id = resp->swap_id,
+		.surf_ids[0] = surf_id,
+		.src_rect[0] = {
+			0, 0, 1920, 1080
+		},
+		.surf_flags[0] = 1,
+		.dst_rect[0] = {
+			0, 0, 1920, 1080
+		},
+		.swap_enabled = 1,
+		.swap_completed = 1,
+	};
+
+	struct dcp_iosurface surf = {
+		.format[0] = 'A',
+		.format[1] = 'B',
+		.format[2] = 'G',
+		.format[3] = 'R',
+		.unk_13 = 13,
+		.unk_14 = 1,
+		.stride = 1920 * 4,
+		.pix_size = 1,
+		.pel_w = 1,
+		.pel_h = 1,
+		.width = 1920,
+		.height = 1080,
+		.buf_size = 1920 * 1080 * 4,
+		.surface_id = surf_id,
+		.has_comp = 1,
+		.has_planes = 1,
+	};
+
+	struct dcp_swap_submit_req *req = kmalloc(sizeof(*req), GFP_KERNEL);
+
+	*req = (struct dcp_swap_submit_req) {
+		.swap_rec = swap_rec,
+		.surf[0] = surf,
+		.surf_iova[0] = dcp->surf_iova,
+	};
+
+	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_SUBMIT,
+		 sizeof(struct dcp_swap_submit_req),
+		 sizeof(struct dcp_swap_submit_resp),
+		 req, NULL);
+
+	kfree(req);
+}
+
 static void dcp_started(struct apple_dcp *dcp, void *data)
 {
+	struct dcp_swap_start_req req = { 0 };
 	u32 *resp = data;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
+
+	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_START,
+		 sizeof(struct dcp_swap_start_req),
+		 sizeof(struct dcp_swap_start_resp),
+		 &req, dcp_swap_started);
 }
 
 static void dcp_start_signal(struct apple_dcp *dcp)
@@ -386,6 +691,7 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct apple_dcp *dcp;
+	void __iomem *regs;
 	dma_addr_t shmem_iova;
 	int ret;
 
@@ -395,10 +701,28 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	BUILD_BUG_ON(sizeof(struct dcp_plane_info) != 0x50);
 	BUILD_BUG_ON(sizeof(struct dcp_component_types) != 0x8);
 	BUILD_BUG_ON(sizeof(struct dcp_iosurface) != 0x204);
+	BUILD_BUG_ON(sizeof(struct dcp_swap_start_req) != 0x18);
+	BUILD_BUG_ON(sizeof(struct dcp_swap_start_resp) != 0x18);
+	BUILD_BUG_ON(sizeof(struct dcp_swap_submit_req) != 0x8a0);
+	BUILD_BUG_ON(sizeof(struct dcp_swap_submit_resp) != 0x8);
+	BUILD_BUG_ON(sizeof(struct dcp_map_reg_req) != 0x10);
+	BUILD_BUG_ON(sizeof(struct dcp_map_reg_resp) != 0x14);
+	BUILD_BUG_ON(sizeof(struct dcp_get_uint_prop_req) != 0x50);
+	BUILD_BUG_ON(sizeof(struct dcp_get_uint_prop_resp) != 0xc);
+	BUILD_BUG_ON(sizeof(struct dcp_map_physical_req) != 0x18);
+	BUILD_BUG_ON(sizeof(struct dcp_map_physical_resp) != 0x14);
 
 	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
 	if (!dcp)
 		return -ENOMEM;
+
+	regs = devm_platform_ioremap_resource_byname(pdev, "raw");
+
+	if (!regs)
+		return -ENODEV;
+
+	dcp->surf_iova = readl(regs + DISP0_FRAMEBUFFER_0);
+	printk("Existing mapping at %X\n", dcp->surf_iova);
 
 	platform_set_drvdata(pdev, dcp);
 

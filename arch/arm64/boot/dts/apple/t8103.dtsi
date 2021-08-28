@@ -160,8 +160,9 @@
 			mbox-names = "mbox";
 			iommus = <&dcp_dart 0>;
 
-			reg-names = "coproc";
-			reg = <0x2 0x31c00000 0x0 0x4000>;
+			reg-names = "coproc", "raw";
+			reg = <0x2 0x31c00000 0x0 0x4000>,
+				<0x2 0x30850000 0x0 0x4000>;
 		};
 
 
