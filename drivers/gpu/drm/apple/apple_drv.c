@@ -254,6 +254,8 @@ static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
 static int apple_platform_probe(struct platform_device *pdev)
 {
 	struct apple_drm_private *apple;
+	struct platform_device *dcp;
+	struct device_node *dcp_node;
 	struct drm_plane *plane;
 	struct drm_crtc *crtc;
 	struct drm_encoder *encoder;
@@ -264,6 +266,12 @@ static int apple_platform_probe(struct platform_device *pdev)
 				   struct apple_drm_private, drm);
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
+
+	dcp_node = of_parse_phandle(pdev->dev.of_node, "coprocessor", 0);
+	printk("Got DCP node %px\n", dcp_node);
+	dcp = of_find_device_by_node(dcp_node);
+	printk("Got DCP device %px\n", dcp);
+
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 
