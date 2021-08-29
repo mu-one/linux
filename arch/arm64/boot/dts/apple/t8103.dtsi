@@ -154,7 +154,7 @@
 			#mbox-cells = <0>;
 		};
 
-		dcp {
+		dcp: dcp {
 			compatible = "apple,dcp";
 			mboxes = <&dcp_mbox>;
 			mbox-names = "mbox";
@@ -167,12 +167,8 @@
 
 		display-subsystem {
 			compatible = "apple,t8103-dcp";
-//			mboxes = <&dcp_mbox 32>;
-//			iommus = <&disp_dart 0>, <&dcp_dart 1>;
 			iommus = <&disp_dart 0>;
-
-			reg = <0x2 0x30850000 0x0 0x4000>;
-			reg-names = "raw";
+			coprocessor = <&dcp>;
 		};
 
 		serial0: serial@235200000 {
