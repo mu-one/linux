@@ -120,8 +120,8 @@ struct dcp_iouserclient {
 struct dcp_rect {
 	u32 x;
 	u32 y;
-	u32 w;
-	u32 h;
+	s32 w;
+	s32 h;
 } __packed;
 
 struct dcp_iomfbswaprec {
