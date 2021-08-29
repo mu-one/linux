@@ -515,7 +515,7 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	struct dcp_swap_start_resp *resp = data;
-	dma_addr_t surf_iova = (uintptr_t) cookie;
+	dma_addr_t *surf_iova = cookie;
 	u32 surf_id = 3; // XXX
 
 	struct dcp_iomfbswaprec swap_rec = {
@@ -534,9 +534,9 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	struct dcp_iosurface surf = {
 		.format[0] = 'A',
-		.format[1] = 'B',
+		.format[1] = 'R',
 		.format[2] = 'G',
-		.format[3] = 'R',
+		.format[3] = 'B',
 		.unk_13 = 13,
 		.unk_14 = 1,
 		.stride = 1920 * 4,
@@ -556,7 +556,7 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 	*req = (struct dcp_swap_submit_req) {
 		.swap_rec = swap_rec,
 		.surf[0] = surf,
-		.surf_iova[0] = surf_iova,
+		.surf_iova[0] = surf_iova[0],
 	};
 
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_SUBMIT,
@@ -567,7 +567,7 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 	kfree(req);
 }
 
-void dcp_swap(struct platform_device *pdev, dma_addr_t dva)
+void dcp_swap(struct platform_device *pdev, dma_addr_t *dva)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct dcp_swap_start_req req = { 0 };
@@ -579,7 +579,7 @@ void dcp_swap(struct platform_device *pdev, dma_addr_t dva)
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_START,
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
-		 &req, dcp_swap_started, (void *) (uintptr_t) dva);
+		 &req, dcp_swap_started, dva);
 }
 EXPORT_SYMBOL_GPL(dcp_swap);
 

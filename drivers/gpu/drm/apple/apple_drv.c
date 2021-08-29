@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/clk.h>
 #include <linux/component.h>
+#include <linux/delay.h>
 #include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
@@ -78,16 +79,6 @@ static void apple_plane_atomic_disable(struct drm_plane *plane,
 static void apple_plane_atomic_update(struct drm_plane *plane,
 				      struct drm_atomic_state *state)
 {
-	struct apple_drm_private *apple = to_apple_drm_private(plane->dev);
-	struct drm_plane_state *plane_state;
-	struct drm_framebuffer *fb;
-	dma_addr_t dva;
-
-	plane_state = drm_atomic_get_new_plane_state(state, plane);
-	fb = plane_state->fb;
-	dva = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
-
-	dcp_swap(apple->dcp, dva);
 }
 
 static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
@@ -244,7 +235,21 @@ static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
-	/* TODO */
+	struct apple_drm_private *apple = to_apple_drm_private(crtc->dev);
+	struct drm_plane *plane;
+	struct drm_plane_state *plane_state;
+	dma_addr_t dva[3] = { 0 };
+	int i;
+
+	for_each_new_plane_in_state(state, plane, plane_state, i) {
+		struct drm_framebuffer *fb = plane_state->fb;
+
+		dva[i] = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
+	}
+
+	dcp_swap(apple->dcp, dva);
+
+	msleep(100);
 }
 
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
@@ -297,16 +302,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-#if 0
-	/*
-	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
-	 * located anywhere in RAM
-	 */
-	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
-	if (ret)
-		return ret;
-#endif
-
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
 		goto err_unload;
@@ -354,6 +349,14 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 
 	drm_mode_config_reset(&apple->drm); // TODO: needed?
+
+	/*
+	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
+	 * located anywhere in RAM
+	 */
+	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
+	if (ret)
+		return ret;
 
 	ret = drm_dev_register(&apple->drm, 0);
 	if (ret)
