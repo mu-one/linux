@@ -297,6 +297,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+#if 0
 	/*
 	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
 	 * located anywhere in RAM
@@ -304,6 +305,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
+#endif
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)

@@ -26,10 +26,11 @@ struct apple_dcp;
 /* Limit on call stack depth (arbitrary). Some nesting is required */
 #define DCP_MAX_CALL_DEPTH 8
 
-typedef void (*dcp_callback_t)(struct apple_dcp *, void *);
+typedef void (*dcp_callback_t)(struct apple_dcp *, void *, void *);
 
 struct dcp_call_channel {
 	dcp_callback_t callbacks[DCP_MAX_CALL_DEPTH];
+	void *cookies[DCP_MAX_CALL_DEPTH];
 	void *output[DCP_MAX_CALL_DEPTH];
 	u16 end[DCP_MAX_CALL_DEPTH];
 
@@ -55,7 +56,6 @@ struct apple_dcp {
 	struct dcp_call_channel ch_cmd, ch_oobcmd;
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
 
-	u32 surf_iova;
 	bool active;
 };
 
@@ -125,7 +125,7 @@ static u8 dcp_pop_depth(u8 *depth)
 /* Call a DCP function given by a tag */
 void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 	      char tag[4], u32 in_len, u32 out_len, void *data,
-	      dcp_callback_t cb)
+	      dcp_callback_t cb, void *cookie)
 {
 	struct dcp_call_channel *ch = dcp_get_call_channel(dcp, context);
 
@@ -153,6 +153,7 @@ void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 		memcpy(out_data, data, in_len);
 
 	ch->callbacks[depth] = cb;
+	ch->cookies[depth] = cookie;
 	ch->output[depth] = out + sizeof(header) + in_len;
 	ch->end[depth] = offset + ALIGN(data_len, DCP_PACKET_ALIGNMENT);
 
@@ -305,7 +306,7 @@ static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
 
 /* Returns success */
 
-static void boot_done(struct apple_dcp *dcp, void *out)
+static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	struct dcp_cb_channel *ch = &dcp->ch_cb;
 	u8 *succ = ch->output[ch->depth - 1];
@@ -314,34 +315,34 @@ static void boot_done(struct apple_dcp *dcp, void *out)
 	dcp_ack(dcp, DCP_CONTEXT_CB);
 }
 
-static void boot_5(struct apple_dcp *dcp, void *out)
+static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	dcp_push(dcp, DCP_CONTEXT_CB, SET_DISPLAY_REFRESH_PROPERTIES, 0,
-		 sizeof(u8), NULL, boot_done);
+		 sizeof(u8), NULL, boot_done, NULL);
 }
 
-static void boot_4(struct apple_dcp *dcp, void *out)
+static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	dcp_push(dcp, DCP_CONTEXT_CB, LATE_INIT_SIGNAL, 0, sizeof(u8), NULL,
-		 boot_5);
+		 boot_5, NULL);
 }
 
-static void boot_3(struct apple_dcp *dcp, void *out)
+static void boot_3(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	u8 v_true = 1;
 
 	dcp_push(dcp, DCP_CONTEXT_CB, FLUSH_SUPPORTS_POWER, sizeof(v_true), 0,
-		 &v_true, boot_4);
+		 &v_true, boot_4, NULL);
 }
 
-static void boot_2(struct apple_dcp *dcp, void *out)
+static void boot_2(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, SETUP_VIDEO_LIMITS, 0, 0, NULL, boot_3);
+	dcp_push(dcp, DCP_CONTEXT_CB, SETUP_VIDEO_LIMITS, 0, 0, NULL, boot_3, NULL);
 }
 
 static bool dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, SET_CREATE_DFB, 0, 0, NULL, boot_2);
+	dcp_push(dcp, DCP_CONTEXT_CB, SET_CREATE_DFB, 0, 0, NULL, boot_2, NULL);
 	return false;
 }
 
@@ -463,6 +464,7 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 {
 	struct dcp_packet_header *header = data;
 	struct dcp_call_channel *ch = dcp_get_call_channel(dcp, context);
+	void *cookie;
 	dcp_callback_t cb;
 
 	if (!ch) {
@@ -474,9 +476,10 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 	dcp_pop_depth(&ch->depth);
 
 	cb = ch->callbacks[ch->depth];
+	cookie = ch->cookies[ch->depth];
 
 	if (cb)
-		cb(dcp, data + sizeof(*header) + header->in_len);
+		cb(dcp, data + sizeof(*header) + header->in_len, cookie);
 }
 
 static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
@@ -509,9 +512,10 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 		dcpep_handle_cb(dcp, ctx_id, data, length);
 }
 
-static void dcp_swap_started(struct apple_dcp *dcp, void *data)
+static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	struct dcp_swap_start_resp *resp = data;
+	dma_addr_t surf_iova = (uintptr_t) cookie;
 	u32 surf_id = 3; // XXX
 
 	struct dcp_iomfbswaprec swap_rec = {
@@ -552,13 +556,13 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data)
 	*req = (struct dcp_swap_submit_req) {
 		.swap_rec = swap_rec,
 		.surf[0] = surf,
-		.surf_iova[0] = dcp->surf_iova,
+		.surf_iova[0] = surf_iova,
 	};
 
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_SUBMIT,
 		 sizeof(struct dcp_swap_submit_req),
 		 sizeof(struct dcp_swap_submit_resp),
-		 req, NULL);
+		 req, NULL, NULL);
 
 	kfree(req);
 }
@@ -570,16 +574,12 @@ void dcp_swap(struct platform_device *pdev, dma_addr_t dva)
 
 	WARN_ON(!dcp->active);
 
-	dcp->surf_iova = dva;
+	printk("Swapping now! Well, not actually. DVA %X\n", (u32) dva);
 
-	printk("Swapping now! Well, not actually. DVA %X\n", dcp->surf_iova);
-
-#if 0
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_START,
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
-		 &req, dcp_swap_started);
-#endif
+		 &req, dcp_swap_started, (void *) (uintptr_t) dva);
 }
 EXPORT_SYMBOL_GPL(dcp_swap);
 
@@ -591,7 +591,7 @@ bool dcp_is_initialized(struct platform_device *pdev)
 }
 EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
-static void dcp_started(struct apple_dcp *dcp, void *data)
+static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	u32 *resp = data;
 
@@ -613,7 +613,7 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 	switch (type) {
 	case DCPEP_TYPE_INITIALIZED:
 		dcp_push(dcp, DCP_CONTEXT_CMD, START_SIGNAL, 0, sizeof(u32),
-			 NULL, dcp_started);
+			 NULL, dcp_started, NULL);
 		break;
 
 	case DCPEP_TYPE_MESSAGE:
