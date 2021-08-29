@@ -169,25 +169,29 @@ static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 	struct dcp_map_physical_req *req = in;
 
 	resp->dva_size = ALIGN(req->size, DART_PAGE_SIZE);
-	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size, DMA_BIDIRECTIONAL, 0);
+	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size,
+				     DMA_BIDIRECTIONAL, 0);
 	resp->mem_desc_id = ++dcp->nr_mappings;
 
 	WARN_ON(resp->mem_desc_id == 0);
 
 	/* XXX: need to validate the DCP is allowed to access */
-	dev_warn(dcp->dev, "dangerously mapping phys addr %llx size %llx flags %x to dva %X\n", req->paddr, req->size, req->flags, (u32) resp->dva);
+	dev_warn(dcp->dev,
+		 "dangerously mapping phys addr %llx size %llx flags %x to dva %X\n",
+		 req->paddr, req->size, req->flags, (u32) resp->dva);
+
 	return true;
 }
 
 /* Pixel clock frequency in Hz. This is 533.333328 Mhz, factored as 33.333333
  * MHz * 16. Slightly greater than the 4K@60 VGA pixel clock 533.250 MHz. */
-#define DCP_CLOCK_FREQUENCY (533333328)
+#define DCP_PIXEL_CLOCK (533333328)
 
 static bool dcpep_cb_get_frequency(struct apple_dcp *dcp, void *out, void *in)
 {
 	u64 *frequency = out;
 
-	*frequency = DCP_CLOCK_FREQUENCY;
+	*frequency = DCP_PIXEL_CLOCK;
 	return true;
 }
 
@@ -215,7 +219,9 @@ static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
 	};
 
 	if (req->index >= ARRAY_SIZE(registers)) {
-		dev_warn(dcp->dev, "attempted to read invalid register index %u", req->index);
+		dev_warn(dcp->dev, "attempted to read invalid reg index %u",
+			 req->index);
+
 		*resp = error;
 	} else {
 		*resp = registers[req->index];
