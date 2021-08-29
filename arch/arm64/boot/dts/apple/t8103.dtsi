@@ -122,15 +122,15 @@
 		dma-ranges;
 		nonposted-mmio;
 
-/*
 		disp_dart: dart@231304000 {
 			compatible = "apple,t8103-dart";
-			reg = <0x2 0x31304000 0x0 0x4000>;
+			//reg = <0x2 0x31304000 0x0 0x4000>;
+			reg = <0x2 0x71304000 0x0 0x4000>; // HACK: dispext0
 			#iommu-cells = <1>;
 			interrupt-parent = <&aic>;
 			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
+			//interrupts = <AIC_IRQ 481 IRQ_TYPE_LEVEL_HIGH>;
 		};
-*/
 
 		dcp_dart: dart@23130c000 {
 			compatible = "apple,t8103-dart";
