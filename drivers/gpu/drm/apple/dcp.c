@@ -25,8 +25,10 @@ struct apple_dcp;
 /* Limit on call stack depth (arbitrary). Some nesting is required */
 #define DCP_MAX_CALL_DEPTH 8
 
+typedef void (*dcp_callback_t)(struct apple_dcp *, void *);
+
 struct dcp_call_channel {
-	void (*callbacks[DCP_MAX_CALL_DEPTH])(struct apple_dcp *, void *);
+	dcp_callback_t callbacks[DCP_MAX_CALL_DEPTH];
 	void *output[DCP_MAX_CALL_DEPTH];
 	u16 end[DCP_MAX_CALL_DEPTH];
 
@@ -49,21 +51,82 @@ struct apple_dcp {
 	/* Number of memory mappings made by the DCP, used as an ID */
 	u32 nr_mappings;
 
-	struct dcp_call_channel ch_cmd;
-	struct dcp_cb_channel ch_cb, ch_async;
+	struct dcp_call_channel ch_cmd, ch_oobcmd;
+	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
 
 	u32 surf_iova;
 };
 
+/* Get a call channel for a context */
+struct dcp_call_channel *dcp_get_call_channel(struct apple_dcp *dcp,
+					      enum dcp_context_id context)
+{
+	switch (context) {
+	case DCP_CONTEXT_CMD:
+		return &dcp->ch_cmd;
+	case DCP_CONTEXT_OOBCMD:
+		return &dcp->ch_oobcmd;
+	default:
+		dev_warn(dcp->dev, "Invalid call channel %u\n", context);
+		return NULL;
+	}
+}
+
+/* Get a callback channel for a context */
+struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
+					  enum dcp_context_id context)
+{
+	switch (context) {
+	case DCP_CONTEXT_CB:
+		return &dcp->ch_cb;
+	case DCP_CONTEXT_OOBCB:
+		return &dcp->ch_oobcb;
+	case DCP_CONTEXT_ASYNC:
+		return &dcp->ch_async;
+	default:
+		dev_warn(dcp->dev, "Invalid callback channel %u\n", context);
+		return NULL;
+	}
+}
+
+/* Send a message to the DCP endpoint */
 static void dcpep_send(struct apple_dcp *dcp, uint64_t msg)
 {
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, msg);
 }
 
+/* Get the start of a packet: after the end of the previous packet */
+static u16 dcp_packet_start(struct dcp_call_channel *ch, u8 depth)
+{
+	if (depth > 0)
+		return ch->end[depth - 1];
+	else
+		return 0;
+}
+
+/* Pushes and pops the depth of the call stack with safety checks */
+static u8 dcp_push_depth(u8 *depth)
+{
+	u8 ret = (*depth)++;
+
+	WARN_ON(ret >= DCP_MAX_CALL_DEPTH);
+	return ret;
+}
+
+static u8 dcp_pop_depth(u8 *depth)
+{
+	WARN_ON((*depth) == 0);
+
+	return --(*depth);
+}
+
+/* Call a DCP function given by a tag */
 void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 	      char tag[4], u32 in_len, u32 out_len, void *data,
-	      void (*cb)(struct apple_dcp *, void *))
+	      dcp_callback_t cb)
 {
+	struct dcp_call_channel *ch = dcp_get_call_channel(dcp, context);
+
 	struct dcp_packet_header header = {
 		.in_len = in_len,
 		.out_len = out_len,
@@ -75,33 +138,26 @@ void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 		.tag[3] = tag[0],
 	};
 
-	struct dcp_call_channel *ch = &dcp->ch_cmd;
-	u8 depth = ch->depth++;
-	u16 offset = (depth > 0) ? ch->end[depth - 1] : 0;
-	void *out = dcp->shmem + offset; // TODO: OOB CMD
+	u8 depth = dcp_push_depth(&ch->depth);
+	u16 offset = dcp_packet_start(ch, depth);
 
+	void *out = dcp->shmem + dcp_channel_offset(context) + offset;
 	void *out_data = out + sizeof(header);
 	size_t data_len = sizeof(header) + in_len + out_len;
 
 	memcpy(out, &header, sizeof(header));
 
-	WARN_ON((data == NULL) != (in_len == 0));
-
-	if (data)
+	if (in_len > 0)
 		memcpy(out_data, data, in_len);
 
-	WARN_ON(depth >= DCP_MAX_CALL_DEPTH);
 	ch->callbacks[depth] = cb;
 	ch->output[depth] = out + sizeof(header) + in_len;
+	ch->end[depth] = offset + ALIGN(data_len, DCP_PACKET_ALIGNMENT);
 
 	dcpep_send(dcp, dcpep_msg(context, data_len, offset, false));
-
-	ch->end[depth] = offset + ALIGN(data_len, DCP_PACKET_ALIGNMENT);
 }
 
-/* Parse a fourcc callback tag "D123" into its number 123. Returns a negative
- * value on parsing failure. */
-
+/* Parse a callback tag "D123" into the ID 123. Returns -EINVAL on failure. */
 static int dcp_parse_tag(char tag[4])
 {
 	u32 d[3];
@@ -120,31 +176,16 @@ static int dcp_parse_tag(char tag[4])
 	return d[0] + (d[1] * 10) + (d[2] * 100);
 }
 
-struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
-					  enum dcp_context_id context)
-{
-	switch (context) {
-	case DCP_CONTEXT_CB:
-		return &dcp->ch_cb;
-	case DCP_CONTEXT_ASYNC:
-		return &dcp->ch_async;
-	default:
-		dev_warn(&dcp->dev, "Invalid callback channel %u\n", context);
-		return NULL;
-	}
-}
-
-
+/* Ack a callback from the DCP */
 void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 {
 	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 
-	WARN_ON(ch->depth == 0);
-	ch->depth--;
-
+	dcp_pop_depth(&ch->depth);
 	dcpep_send(dcp, dcpep_msg(context, 0, 0, true));
 }
 
+/* DCP callback handlers */
 static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
 	return true;
@@ -384,11 +425,8 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	void *in, *out;
 	int tag = dcp_parse_tag(hdr->tag);
 	bool ack = true;
-	struct dcp_cb_channel *ch;
+	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 	u8 depth;
-
-	WARN_ON(context != DCP_CONTEXT_CB); // TODO: unexpected
-	ch = &dcp->ch_cb;
 
 	if (tag < 0 || tag >= DCPEP_MAX_CB) {
 		dev_warn(dev, "received invalid tag %c%c%c%c\n",
@@ -397,8 +435,7 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	}
 
 	cb = &dcpep_cb_handlers[tag];
-	depth = ch->depth++;
-	WARN_ON(ch->depth >= DCP_MAX_CALL_DEPTH);
+	depth = dcp_push_depth(&ch->depth);
 
 	if (!cb->cb) {
 		dev_warn(dev, "received unknown callback %c%c%c%c\n",
@@ -416,7 +453,7 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 
 ack:
 	if (ack)
-		dcp_ack(dcp, DCP_CONTEXT_CB);
+		dcp_ack(dcp, context);
 }
 
 static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
@@ -424,11 +461,16 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 {
 	struct dcp_packet_header *header = data;
 	struct dcp_call_channel *ch;
+	dcp_callback_t cb;
 
 	switch (context) {
 	case DCP_CONTEXT_CMD:
 	case DCP_CONTEXT_CB:
 		ch = &dcp->ch_cmd;
+		break;
+	case DCP_CONTEXT_OOBCMD:
+	case DCP_CONTEXT_OOBCB:
+		ch = &dcp->ch_oobcmd;
 		break;
 	default:
 		dev_warn(dcp->dev, "ignoring ack on unknown context %X\n",
@@ -436,13 +478,12 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 		return;
 	}
 
-	WARN_ON(ch->depth == 0);
-	ch->depth--;
+	dcp_pop_depth(&ch->depth);
 
-	if (!ch->callbacks[ch->depth])
-		return;
+	cb = ch->callbacks[ch->depth];
 
-	ch->callbacks[ch->depth](dcp, data + sizeof(*header) + header->in_len);
+	if (cb)
+		cb(dcp, data + sizeof(*header) + header->in_len);
 }
 
 static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
