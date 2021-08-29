@@ -34,7 +34,7 @@ struct dcp_call_channel {
 	u8 depth;
 };
 
-struct dcp_callback_channel {
+struct dcp_cb_channel {
 	u8 depth;
 	void *output[DCP_MAX_CALL_DEPTH];
 };
@@ -50,7 +50,7 @@ struct apple_dcp {
 	u32 nr_mappings;
 
 	struct dcp_call_channel ch_cmd;
-	struct dcp_callback_channel ch_cb;
+	struct dcp_cb_channel ch_cb, ch_async;
 
 	u32 surf_iova;
 };
@@ -120,12 +120,24 @@ static int dcp_parse_tag(char tag[4])
 	return d[0] + (d[1] * 10) + (d[2] * 100);
 }
 
+struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
+					  enum dcp_context_id context)
+{
+	switch (context) {
+	case DCP_CONTEXT_CB:
+		return &dcp->ch_cb;
+	case DCP_CONTEXT_ASYNC:
+		return &dcp->ch_async;
+	default:
+		dev_warn(&dcp->dev, "Invalid callback channel %u\n", context);
+		return NULL;
+	}
+}
+
+
 void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 {
-	struct dcp_callback_channel *ch;
-
-	WARN_ON(context != DCP_CONTEXT_CB); // TODO
-	ch = &dcp->ch_cb;
+	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 
 	WARN_ON(ch->depth == 0);
 	ch->depth--;
@@ -252,7 +264,7 @@ static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
 
 static void boot_done(struct apple_dcp *dcp, void *out)
 {
-	struct dcp_callback_channel *ch = &dcp->ch_cb;
+	struct dcp_cb_channel *ch = &dcp->ch_cb;
 	u8 *succ = ch->output[ch->depth - 1];
 
 	*succ = 1;
@@ -372,7 +384,7 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	void *in, *out;
 	int tag = dcp_parse_tag(hdr->tag);
 	bool ack = true;
-	struct dcp_callback_channel *ch;
+	struct dcp_cb_channel *ch;
 	u8 depth;
 
 	WARN_ON(context != DCP_CONTEXT_CB); // TODO: unexpected
