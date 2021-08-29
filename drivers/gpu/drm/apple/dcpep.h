@@ -30,15 +30,24 @@ enum dcp_context_id {
 	DCP_NUM_CONTEXTS
 };
 
+static int dcp_tx_offset(enum dcp_context_id id)
+{
+	switch (id) {
+	case DCP_CONTEXT_CB:
+	case DCP_CONTEXT_CMD:    return 0x00000;
+	case DCP_CONTEXT_OOBCB:
+	case DCP_CONTEXT_OOBCMD: return 0x08000;
+	default:		 return -EINVAL;
+	}
+}
+
 static int dcp_channel_offset(enum dcp_context_id id)
 {
 	switch (id) {
-	case DCP_CONTEXT_CMD:    return 0x00000;
-	case DCP_CONTEXT_OOBCMD: return 0x08000;
 	case DCP_CONTEXT_ASYNC:  return 0x40000;
 	case DCP_CONTEXT_CB:     return 0x60000;
 	case DCP_CONTEXT_OOBCB:  return 0x68000;
-	default:		 return -EINVAL;
+	default:		 return dcp_tx_offset(id);
 	}
 }
 

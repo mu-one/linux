@@ -63,11 +63,12 @@ struct dcp_call_channel *dcp_get_call_channel(struct apple_dcp *dcp,
 {
 	switch (context) {
 	case DCP_CONTEXT_CMD:
+	case DCP_CONTEXT_CB:
 		return &dcp->ch_cmd;
 	case DCP_CONTEXT_OOBCMD:
+	case DCP_CONTEXT_OOBCB:
 		return &dcp->ch_oobcmd;
 	default:
-		dev_warn(dcp->dev, "Invalid call channel %u\n", context);
 		return NULL;
 	}
 }
@@ -84,7 +85,6 @@ struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
 	case DCP_CONTEXT_ASYNC:
 		return &dcp->ch_async;
 	default:
-		dev_warn(dcp->dev, "Invalid callback channel %u\n", context);
 		return NULL;
 	}
 }
@@ -141,7 +141,7 @@ void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 	u8 depth = dcp_push_depth(&ch->depth);
 	u16 offset = dcp_packet_start(ch, depth);
 
-	void *out = dcp->shmem + dcp_channel_offset(context) + offset;
+	void *out = dcp->shmem + dcp_tx_offset(context) + offset;
 	void *out_data = out + sizeof(header);
 	size_t data_len = sizeof(header) + in_len + out_len;
 
@@ -460,19 +460,10 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 			     void *data, u32 length)
 {
 	struct dcp_packet_header *header = data;
-	struct dcp_call_channel *ch;
+	struct dcp_call_channel *ch = dcp_get_call_channel(dcp, context);
 	dcp_callback_t cb;
 
-	switch (context) {
-	case DCP_CONTEXT_CMD:
-	case DCP_CONTEXT_CB:
-		ch = &dcp->ch_cmd;
-		break;
-	case DCP_CONTEXT_OOBCMD:
-	case DCP_CONTEXT_OOBCB:
-		ch = &dcp->ch_oobcmd;
-		break;
-	default:
+	if (!ch) {
 		dev_warn(dcp->dev, "ignoring ack on unknown context %X\n",
 			 context);
 		return;
@@ -509,9 +500,6 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 	}
 
 	data = dcp->shmem + channel_offset + offset;
-
-	dev_info(dcp->dev, "got %s to context %u offset %u length %u\n",
-		 ack ? "ack" : "message", ctx_id, offset, length);
 
 	if (ack)
 		dcpep_handle_ack(dcp, ctx_id, data, length);
