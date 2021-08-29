@@ -18,6 +18,7 @@
 #include "dcpep.h"
 
 #define DISP0_FRAMEBUFFER_0 0x54
+#define DART_PAGE_SIZE (16384)
 
 struct apple_dcp;
 
@@ -79,12 +80,8 @@ void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 	u16 offset = (depth > 0) ? ch->end[depth - 1] : 0;
 	void *out = dcp->shmem + offset; // TODO: OOB CMD
 
-
 	void *out_data = out + sizeof(header);
 	size_t data_len = sizeof(header) + in_len + out_len;
-
-	print_hex_dump(KERN_INFO, "apple-dcp: ", DUMP_PREFIX_OFFSET,
-				16, 1, data, in_len, true);
 
 	memcpy(out, &header, sizeof(header));
 
@@ -136,20 +133,6 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	dcpep_send(dcp, dcpep_msg(context, 0, 0, true));
 }
 
-static bool HACK_should_hexdump(int tag)
-{
-	switch (tag) {
-	case 121:
-	case 122:
-	case 123:
-		/* setDCPAVProp* is noisy */
-		return false;
-	default:
-		return false;
-//		return true;
-	}
-}
-
 static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
 	return true;
@@ -162,20 +145,6 @@ static bool dcpep_cb_zero(struct apple_dcp *dcp, void *out, void *in)
 	*resp = 0;
 	return true;
 }
-
-struct dcp_get_uint_prop_req {
-	char obj[4];
-	char key[0x40];
-	u64 value;
-	u8 value_null;
-	u8 padding[3];
-} __packed;
-
-struct dcp_get_uint_prop_resp {
-	u64 value;
-	u8 ret;
-	u8 padding[3];
-} __packed;
 
 static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
 {
@@ -193,23 +162,6 @@ static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
 	resp->value = 0;
 	return true;
 }
-
-struct dcp_map_physical_req {
-	u64 paddr;
-	u64 size;
-	u32 flags;
-	u8 dva_null;
-	u8 dva_size;
-	u8 padding[2];
-} __packed;
-
-struct dcp_map_physical_resp {
-	u64 dva;
-	u64 dva_size;
-	u32 mem_desc_id;
-} __packed;
-
-#define DART_PAGE_SIZE (16384)
 
 static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 {
@@ -238,21 +190,6 @@ static bool dcpep_cb_get_frequency(struct apple_dcp *dcp, void *out, void *in)
 	*frequency = DCP_CLOCK_FREQUENCY;
 	return true;
 }
-
-struct dcp_map_reg_req {
-	char obj[4];
-	u32 index;
-	u32 flags;
-	u8 addr_null;
-	u8 length_null;
-	u8 padding[2];
-} __packed;
-
-struct dcp_map_reg_resp {
-	u64 addr;
-	u64 length;
-	u32 ret;
-} __packed;
 
 static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
 {
@@ -304,49 +241,6 @@ static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
 	*resp = 0;
 	return true;
 }
-
-#define LATE_INIT_SIGNAL "A000"
-#define SETUP_VIDEO_LIMITS "A029"
-#define SET_CREATE_DFB "A357"
-#define START_SIGNAL "A401"
-#define SWAP_START "A407"
-#define SWAP_SUBMIT "A408"
-#define CREATE_DEFAULT_FB "A442"
-#define SET_DISPLAY_REFRESH_PROPERTIES "A459"
-#define FLUSH_SUPPORTS_POWER "A462"
-
-struct dcp_swap_start_req {
-	u32 swap_id;
-	struct dcp_iouserclient client;
-	u8 swap_id_null;
-	u8 client_null;
-	u8 padding[2];
-} __packed;
-
-struct dcp_swap_start_resp {
-	u32 swap_id;
-	struct dcp_iouserclient client;
-	u32 ret;
-} __packed;
-
-struct dcp_swap_submit_req {
-	struct dcp_iomfbswaprec swap_rec;
-	struct dcp_iosurface surf[SWAP_SURFACES];
-	u32 surf_iova[SWAP_SURFACES];
-	u8 unkbool;
-	u64 unkdouble;
-	u32 unkint;
-	u8 swap_rec_null;
-	u8 surf_null[SWAP_SURFACES];
-	u8 unkoutbool_null;
-	u8 padding[2];
-} __packed;
-
-struct dcp_swap_submit_resp {
-	u8 unkoutbool;
-	u32 ret;
-	u8 padding[3];
-} __packed;
 
 /* Returns success */
 
@@ -463,7 +357,8 @@ struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[598] = {"find_swap_function_gated", dcpep_cb_nop },
 };
 
-static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context, void *data, u32 length)
+static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
+			    void *data, u32 length)
 {
 	struct device *dev = dcp->dev;
 	struct dcpep_cb *cb;
@@ -504,11 +399,6 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context, 
 ack:
 	if (ack)
 		dcp_ack(dcp, DCP_CONTEXT_CB);
-
-	if (HACK_should_hexdump(tag)) {
-		print_hex_dump(KERN_INFO, "apple-dcp: ", DUMP_PREFIX_OFFSET,
-				16, 1, data, length, true);
-	}
 }
 
 static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
@@ -637,12 +527,6 @@ static void dcp_started(struct apple_dcp *dcp, void *data)
 		 &req, dcp_swap_started);
 }
 
-static void dcp_start_signal(struct apple_dcp *dcp)
-{
-	dcp_push(dcp, DCP_CONTEXT_CMD, START_SIGNAL, 0, sizeof(u32), NULL,
-		 dcp_started);
-}
-
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 {
 	struct apple_dcp *dcp = cookie;
@@ -656,8 +540,8 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 
 	switch (type) {
 	case DCPEP_TYPE_INITIALIZED:
-		dev_info(dcp->dev, "initialized!\n");
-		dcp_start_signal(dcp);
+		dcp_push(dcp, DCP_CONTEXT_CMD, START_SIGNAL, 0, sizeof(u32),
+			 NULL, dcp_started);
 		break;
 
 	case DCPEP_TYPE_MESSAGE:

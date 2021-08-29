@@ -184,4 +184,95 @@ struct dcp_iosurface {
 	u8 padding[7];
 } __packed;
 
+/* Method calls */
+
+#define LATE_INIT_SIGNAL "A000"
+#define SETUP_VIDEO_LIMITS "A029"
+#define SET_CREATE_DFB "A357"
+#define START_SIGNAL "A401"
+#define SWAP_START "A407"
+#define SWAP_SUBMIT "A408"
+#define CREATE_DEFAULT_FB "A442"
+#define SET_DISPLAY_REFRESH_PROPERTIES "A459"
+#define FLUSH_SUPPORTS_POWER "A462"
+
+/* Prototypes */
+
+struct dcp_map_physical_req {
+	u64 paddr;
+	u64 size;
+	u32 flags;
+	u8 dva_null;
+	u8 dva_size;
+	u8 padding[2];
+} __packed;
+
+struct dcp_map_physical_resp {
+	u64 dva;
+	u64 dva_size;
+	u32 mem_desc_id;
+} __packed;
+
+struct dcp_map_reg_req {
+	char obj[4];
+	u32 index;
+	u32 flags;
+	u8 addr_null;
+	u8 length_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_map_reg_resp {
+	u64 addr;
+	u64 length;
+	u32 ret;
+} __packed;
+
+struct dcp_swap_start_req {
+	u32 swap_id;
+	struct dcp_iouserclient client;
+	u8 swap_id_null;
+	u8 client_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_swap_start_resp {
+	u32 swap_id;
+	struct dcp_iouserclient client;
+	u32 ret;
+} __packed;
+
+struct dcp_swap_submit_req {
+	struct dcp_iomfbswaprec swap_rec;
+	struct dcp_iosurface surf[SWAP_SURFACES];
+	u32 surf_iova[SWAP_SURFACES];
+	u8 unkbool;
+	u64 unkdouble;
+	u32 unkint;
+	u8 swap_rec_null;
+	u8 surf_null[SWAP_SURFACES];
+	u8 unkoutbool_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_swap_submit_resp {
+	u8 unkoutbool;
+	u32 ret;
+	u8 padding[3];
+} __packed;
+
+struct dcp_get_uint_prop_req {
+	char obj[4];
+	char key[0x40];
+	u64 value;
+	u8 value_null;
+	u8 padding[3];
+} __packed;
+
+struct dcp_get_uint_prop_resp {
+	u64 value;
+	u8 ret;
+	u8 padding[3];
+} __packed;
+
 #endif
