@@ -16,6 +16,7 @@
 #include <linux/apple-rtkit.h>
 
 #include "dcpep.h"
+#include "dcp.h"
 
 #define DISP0_FRAMEBUFFER_0 0x54
 #define DART_PAGE_SIZE (16384)
@@ -55,6 +56,7 @@ struct apple_dcp {
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
 
 	u32 surf_iova;
+	bool active;
 };
 
 /* Get a call channel for a context */
@@ -561,17 +563,39 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data)
 	kfree(req);
 }
 
-static void dcp_started(struct apple_dcp *dcp, void *data)
+static void dcp_swap_now(struct apple_dcp *dcp)
 {
 	struct dcp_swap_start_req req = { 0 };
-	u32 *resp = data;
-
-	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
+	WARN_ON(!dcp->active);
 
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_START,
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
 		 &req, dcp_swap_started);
+}
+
+void dcp_swap(struct platform_device *pdev, dma_addr_t dva)
+{
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+
+	dcp->surf_iova = dva;
+
+	if (dcp->active)
+		dcp_swap_now(dcp);
+
+}
+EXPORT_SYMBOL_GPL(dcp_swap);
+
+static void dcp_started(struct apple_dcp *dcp, void *data)
+{
+	u32 *resp = data;
+
+	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
+
+	dcp->active = true;
+
+	if (dcp->surf_iova)
+		dcp_swap_now(dcp);
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
@@ -642,13 +666,6 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
 	if (!dcp)
 		return -ENOMEM;
-
-	regs = devm_platform_ioremap_resource_byname(pdev, "raw");
-
-	if (!regs)
-		return -ENODEV;
-
-	dcp->surf_iova = readl(regs + DISP0_FRAMEBUFFER_0);
 
 	platform_set_drvdata(pdev, dcp);
 

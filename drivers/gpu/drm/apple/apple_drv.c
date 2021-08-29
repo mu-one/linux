@@ -31,6 +31,8 @@
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
 
+#include "dcp.h"
+
 #define DISP0_FORMAT 0x30
 #define    DISP0_FORMAT_BGRA 0x5000
 #define DISP0_FRAMEBUFFER_0 0x54
@@ -38,7 +40,8 @@
 #define DISP0_FRAMEBUFFER_2 0x5c
 
 struct apple_drm_private {
-	struct drm_device	drm;
+	struct drm_device drm;
+	struct platform_device *dcp;
 };
 
 #define to_apple_drm_private(x) \
@@ -84,7 +87,7 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 	fb = plane_state->fb;
 	dva = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
 
-	printk("Swap dva %X\n", dva);
+	dcp_swap(apple->dcp, dva);
 }
 
 static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
@@ -269,16 +272,14 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	dcp_node = of_parse_phandle(pdev->dev.of_node, "coprocessor", 0);
 	printk("Got DCP node %px\n", dcp_node);
-	dcp = of_find_device_by_node(dcp_node);
-	printk("Got DCP device %px\n", dcp);
-
+	apple->dcp = of_find_device_by_node(dcp_node);
+	printk("Got DCP device %px\n", apple->dcp);
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 
 	if (ret)
 		return ret;
 
-#if 0
 	/*
 	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
 	 * located anywhere in RAM
@@ -286,7 +287,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
-#endif
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
