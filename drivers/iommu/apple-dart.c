@@ -864,6 +864,9 @@ static int apple_dart_probe(struct platform_device *pdev)
 
 	dart->locked = apple_dart_is_locked(dart);
 
+	if (of_get_property(dev->of_node, "apple,force-locked", NULL))
+		dart->locked = true;
+
 	if (!dart->locked)
 		ret = apple_dart_hw_reset(dart);
 
