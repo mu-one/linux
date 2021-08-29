@@ -17,11 +17,7 @@
 
 #include "dcpep.h"
 
-#define DISP0_FORMAT 0x30
-#define    DISP0_FORMAT_BGRA 0x5000
 #define DISP0_FRAMEBUFFER_0 0x54
-#define DISP0_FRAMEBUFFER_1 0x58
-#define DISP0_FRAMEBUFFER_2 0x5c
 
 struct apple_dcp;
 
@@ -722,7 +718,6 @@ static int dcp_platform_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	dcp->surf_iova = readl(regs + DISP0_FRAMEBUFFER_0);
-	printk("Existing mapping at %X\n", dcp->surf_iova);
 
 	platform_set_drvdata(pdev, dcp);
 
