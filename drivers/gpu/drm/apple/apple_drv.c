@@ -279,6 +279,9 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (!platform_get_drvdata(dcp))
 		return -EPROBE_DEFER;
 
+	if (!dcp_is_initialized(dcp))
+		return -EPROBE_DEFER;
+
 	apple = devm_drm_dev_alloc(&pdev->dev, &apple_drm_driver,
 				   struct apple_drm_private, drm);
 	if (IS_ERR(apple))

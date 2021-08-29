@@ -563,39 +563,40 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data)
 	kfree(req);
 }
 
-static void dcp_swap_now(struct apple_dcp *dcp)
+void dcp_swap(struct platform_device *pdev, dma_addr_t dva)
 {
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct dcp_swap_start_req req = { 0 };
+
 	WARN_ON(!dcp->active);
 
+	dcp->surf_iova = dva;
+
+	printk("Swapping now! Well, not actually. DVA %X\n", dcp->surf_iova);
+
+#if 0
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_START,
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
 		 &req, dcp_swap_started);
+#endif
 }
+EXPORT_SYMBOL_GPL(dcp_swap);
 
-void dcp_swap(struct platform_device *pdev, dma_addr_t dva)
+bool dcp_is_initialized(struct platform_device *pdev)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 
-	dcp->surf_iova = dva;
-
-	if (dcp->active)
-		dcp_swap_now(dcp);
-
+	return dcp->active;
 }
-EXPORT_SYMBOL_GPL(dcp_swap);
+EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
 static void dcp_started(struct apple_dcp *dcp, void *data)
 {
 	u32 *resp = data;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
-
 	dcp->active = true;
-
-	if (dcp->surf_iova)
-		dcp_swap_now(dcp);
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
@@ -642,7 +643,6 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct apple_dcp *dcp;
-	void __iomem *regs;
 	dma_addr_t shmem_iova;
 	int ret;
 
