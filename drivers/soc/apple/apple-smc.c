@@ -6,6 +6,7 @@
 #include <linux/gfp.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/irqdomain.h>
 #include <linux/irq.h>
 #include <linux/jiffies.h>
 #include <linux/mailbox_controller.h>
@@ -31,10 +32,18 @@ struct apple_smc {
 	u8 cmd_tag;
 	u64 cmd_reply;
 	int cmd_status;
+	bool cmd_expect_reply;
 	bool cmd_use_tags;
+
+	struct irq_domain *irq_domain;
 };
 
 #define APPLE_SMC_BOOT_TIMEOUT msecs_to_jiffies(1000)
+
+#define FOURCC(a, b, c, d)                                                     \
+	(((u32)(a) << 24) | ((u32)(b) << 16) | ((u32)(c) << 8) | ((u32)(d)))
+
+#define APPLE_SMC_KEY_NOTIFICATION_EN FOURCC('N', 'T', 'A', 'P')
 
 #define APPLE_SMC_ENDPOINT 0x20
 
@@ -52,7 +61,13 @@ struct apple_smc {
 #define APPLE_SMC_OPCODE_GET_ADDR 0x17
 #define APPLE_SMC_OPCODE_READ_KEY_PAYLOAD 0x20
 
+#define APPLE_SMC_REPLY_TYPE GENMASK(7, 0)
 #define APPLE_SMC_REPLY_NOTIFICATION 0x18
+
+#define APPLE_SMC_NOTIFICATION_TYPE GENMASK(63, 56)
+#define APPLE_SMC_NOTIFICATION_PAYLOAD GENMASK(55, 32)
+
+#define APPLE_SMC_NOTIFICATION_SYSTEM_STATE 0x70
 
 static int apple_smc_command(struct apple_smc *smc, u8 opcode, u32 arg0,
 			     u16 arg1, const void *bfr_in, size_t size_in,
@@ -72,6 +87,7 @@ static int apple_smc_command(struct apple_smc *smc, u8 opcode, u32 arg0,
 
 	mutex_lock(&smc->cmd_lock);
 	reinit_completion(&smc->cmd_completion);
+	smc->cmd_expect_reply = true;
 
 	if (size_in)
 		memcpy_toio(smc->cmd_arg_buffer, bfr_in, size_in);
@@ -121,9 +137,29 @@ static int apple_smc_write_key_u8(struct apple_smc *smc, u32 key, u8 value)
 	return apple_smc_write_key(smc, key, &value, sizeof(u8));
 }
 
+static void apple_smc_handle_notification(struct apple_smc *smc, u64 message)
+{
+	unsigned long flags;
+	u8 type = FIELD_GET(APPLE_SMC_NOTIFICATION_TYPE, message);
+	u32 payload = FIELD_GET(APPLE_SMC_NOTIFICATION_PAYLOAD, message);
+	dev_warn(smc->dev, "notification: %016llx (type: %02x, payload: %08x)",
+		 message, type, payload);
+
+	// FIXME
+	if (type != 0x70)
+		return;
+	if (payload != 0x200000)
+		return;
+
+	local_irq_save(flags);
+	generic_handle_domain_irq(smc->irq_domain, 21);
+	local_irq_restore(flags);
+}
+
 static void apple_smc_recv_message(void *cookie, u8 endpoint, u64 message)
 {
 	struct apple_smc *smc = cookie;
+	u8 type;
 
 	dev_dbg(smc->dev, "RX: %016llx on EP %02x\n", message, endpoint);
 
@@ -133,7 +169,17 @@ static void apple_smc_recv_message(void *cookie, u8 endpoint, u64 message)
 		return;
 	}
 
-	// TODO: handle notifications
+	type = FIELD_GET(APPLE_SMC_REPLY_TYPE, message);
+
+	if (type == APPLE_SMC_REPLY_NOTIFICATION) {
+		apple_smc_handle_notification(smc, message);
+		return;
+	}
+
+	if (!smc->cmd_expect_reply) {
+		dev_warn(smc->dev, "unexpected message %016llx", message);
+		return;
+	}
 
 	if (smc->cmd_use_tags) {
 		u8 tag = FIELD_GET(APPLE_SMC_CMD_TAG, message);
@@ -149,6 +195,7 @@ static void apple_smc_recv_message(void *cookie, u8 endpoint, u64 message)
 
 	smc->cmd_status = 0;
 	smc->cmd_reply = message;
+	smc->cmd_expect_reply = false;
 	complete(&smc->cmd_completion);
 }
 
@@ -173,8 +220,40 @@ static void apple_smc_unmap(void *cookie, void __iomem *ptr, dma_addr_t addr,
 {
 }
 
+static inline int apple_smc_irqd_xlate(struct irq_domain *d,
+				       struct device_node *node,
+				       const u32 *intspec, unsigned int intsize,
+				       unsigned long *out_hwirq,
+				       unsigned int *out_type)
+{
+	// FIXME
+	if (intspec[0] != 21)
+		return -EINVAL;
+
+	*out_hwirq = intspec[0];
+	*out_type = IRQ_TYPE_EDGE_RISING; // TODO: figure this out correctly
+	return 0;
+}
+
+static struct irq_chip apple_smc_irq_chip = {
+	.name = "Apple SMC Notification Interrupt Chip",
+};
+
+static int apple_smc_irqd_map(struct irq_domain *d, unsigned int virq,
+			      irq_hw_number_t hw)
+{
+	irq_domain_set_info(d, virq, hw, &apple_smc_irq_chip, d->host_data,
+			    handle_simple_irq, NULL, NULL);
+	return 0;
+}
+
+static const struct irq_domain_ops apple_smc_irq_domain_ops = {
+	.xlate = apple_smc_irqd_xlate,
+	.map = apple_smc_irqd_map,
+};
+
 static const struct apple_rtkit_ops apple_smc_rtkit_ops = {
-	.flags = APPLE_RTKIT_SHMEM_OWNER_RTKIT,
+	.flags = APPLE_RTKIT_SHMEM_OWNER_RTKIT | APPLE_RTKIT_RECV_ATOMIC,
 	.recv_message = apple_smc_recv_message,
 	.shmem_map = apple_smc_shmem_map,
 	.shmem_unmap = apple_smc_unmap,
@@ -248,6 +327,15 @@ static int apple_smc_probe(struct platform_device *pdev)
 
 	smc->cmd_arg_buffer =
 		apple_smc_shmem_map(smc, shmem_arg_addr, APPLE_SMC_ARGBFR_SIZE);
+
+	ret = apple_smc_write_key_u8(smc, APPLE_SMC_KEY_NOTIFICATION_EN, 1);
+	if (ret)
+		return ret;
+
+	smc->irq_domain = irq_domain_add_tree(
+		smc->dev->of_node, &apple_smc_irq_domain_ops, smc);
+	if (!smc->irq_domain)
+		return -EINVAL;
 
 	return 0;
 }
