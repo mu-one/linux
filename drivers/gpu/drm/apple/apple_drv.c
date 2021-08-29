@@ -265,14 +265,28 @@ static int apple_platform_probe(struct platform_device *pdev)
 	struct drm_connector *connector;
 	int ret;
 
+	dcp_node = of_parse_phandle(pdev->dev.of_node, "coprocessor", 0);
+
+	if (!dcp_node)
+		return -ENODEV;
+
+	dcp = of_find_device_by_node(dcp_node);
+
+	if (!dcp)
+		return -ENODEV;
+
+	/* DCP needs to be initialized before KMS can come online */
+	if (!platform_get_drvdata(dcp))
+		return -EPROBE_DEFER;
+
 	apple = devm_drm_dev_alloc(&pdev->dev, &apple_drm_driver,
 				   struct apple_drm_private, drm);
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
 
-	dcp_node = of_parse_phandle(pdev->dev.of_node, "coprocessor", 0);
+	apple->dcp = dcp;
+
 	printk("Got DCP node %px\n", dcp_node);
-	apple->dcp = of_find_device_by_node(dcp_node);
 	printk("Got DCP device %px\n", apple->dcp);
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
