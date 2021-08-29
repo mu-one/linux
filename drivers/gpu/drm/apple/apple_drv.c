@@ -39,7 +39,6 @@
 
 struct apple_drm_private {
 	struct drm_device	drm;
-	void __iomem		*regs;
 };
 
 #define to_apple_drm_private(x) \
@@ -85,8 +84,7 @@ static void apple_plane_atomic_update(struct drm_plane *plane,
 	fb = plane_state->fb;
 	dva = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
 
-	writel(dva, apple->regs + DISP0_FRAMEBUFFER_0);
-	writel(DISP0_FORMAT_BGRA, apple->regs + DISP0_FORMAT);
+	printk("Swap dva %X\n", dva);
 }
 
 static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
@@ -272,11 +270,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	apple->regs = devm_platform_ioremap_resource(pdev, 0);
-
-	if (!apple->regs)
-		return -ENODEV;
-
+#if 0
 	/*
 	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
 	 * located anywhere in RAM
@@ -284,6 +278,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
+#endif
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
