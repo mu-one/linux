@@ -57,6 +57,8 @@ struct apple_dcp {
 	struct dcp_call_channel ch_cmd, ch_oobcmd;
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
 
+	dma_addr_t surf_iova[3];
+
 	bool active;
 };
 
@@ -522,7 +524,6 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	struct dcp_swap_start_resp *resp = data;
-	dma_addr_t *surf_iova = cookie;
 	u32 surf_id = 3; // XXX
 
 	struct dcp_iomfbswaprec swap_rec = {
@@ -563,7 +564,7 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 	*req = (struct dcp_swap_submit_req) {
 		.swap_rec = swap_rec,
 		.surf[0] = surf,
-		.surf_iova[0] = surf_iova[0],
+		.surf_iova[0] = dcp->surf_iova[0],
 	};
 
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_SUBMIT,
@@ -579,14 +580,16 @@ void dcp_swap(struct platform_device *pdev, dma_addr_t *dva)
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct dcp_swap_start_req req = { 0 };
 
+	memcpy(&dcp->surf_iova, dva, sizeof(dcp->surf_iova));
+
 	WARN_ON(!dcp->active);
 
-	printk("Swapping now! Well, not actually. DVA %X\n", (u32) dva);
+	printk("Swapping now! Well, not actually. DVA %X\n", (u32) dva[0]);
 
 	dcp_push(dcp, DCP_CONTEXT_CMD, SWAP_START,
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
-		 &req, dcp_swap_started, dva);
+		 &req, dcp_swap_started, NULL);
 }
 EXPORT_SYMBOL_GPL(dcp_swap);
 

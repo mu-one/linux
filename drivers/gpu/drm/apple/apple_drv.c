@@ -35,11 +35,17 @@
 
 #include "dcp.h"
 
+struct apple_crtc {
+	struct drm_crtc base;
+	struct drm_pending_vblank_event *event;
+};
+
+#define to_apple_crtc(x) container_of(x, struct apple_crtc, base)
+
 struct apple_drm_private {
 	struct drm_device drm;
 	struct platform_device *dcp;
-	struct drm_crtc *crtc;
-	struct drm_pending_vblank_event **event;
+	struct apple_crtc *crtc;
 };
 
 #define to_apple_drm_private(x) \
@@ -247,22 +253,32 @@ static void apple_crtc_atomic_disable(struct drm_crtc *crtc,
 static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
-	/* TODO */
+	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
+	unsigned long flags;
+
+	if (crtc->state->event) {
+		WARN_ON(drm_crtc_vblank_get(crtc) != 0);
+
+		spin_lock_irqsave(&crtc->dev->event_lock, flags);
+		apple_crtc->event = crtc->state->event;
+		spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
+		crtc->state->event = NULL;
+	}
 }
 
 void apple_crtc_vblank(struct apple_drm_private *apple)
 {
-	struct drm_pending_vblank_event **event = apple->event;
 	unsigned long flags;
 
-	printk("vblanking %u\n", event && *event);
+	printk("vblanking %u\n", apple->crtc->event);
 
-	drm_crtc_handle_vblank(apple->crtc);
+	drm_crtc_handle_vblank(&apple->crtc->base);
 
 	spin_lock_irqsave(&apple->drm.event_lock, flags);
-	if (event && *event) {
-		drm_crtc_send_vblank_event(apple->crtc, *event);
-		*event = NULL;
+	if (apple->crtc->event) {
+		drm_crtc_send_vblank_event(&apple->crtc->base, apple->crtc->event);
+		drm_crtc_vblank_put(&apple->crtc->base);
+		apple->crtc->event = NULL;
 	}
 	spin_unlock_irqrestore(&apple->drm.event_lock, flags);
 }
@@ -285,8 +301,6 @@ static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 		dva[i] = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
 	}
 
-	apple->event = &new_state->event;
-
 	dcp_swap(apple->dcp, dva);
 }
 
@@ -303,7 +317,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	struct platform_device *dcp;
 	struct device_node *dcp_node;
 	struct drm_plane *plane;
-	struct drm_crtc *crtc;
+	struct apple_crtc *crtc;
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
 	int ret;
@@ -361,16 +375,16 @@ static int apple_platform_probe(struct platform_device *pdev)
 	}
 
 	crtc = devm_kzalloc(&pdev->dev, sizeof(*crtc), GFP_KERNEL);
-	ret = drm_crtc_init_with_planes(&apple->drm, crtc, plane, NULL,
+	ret = drm_crtc_init_with_planes(&apple->drm, &crtc->base, plane, NULL,
 					&apple_crtc_funcs, NULL);
 	if (ret)
 		goto err_unload;
 
 
-	drm_crtc_helper_add(crtc, &apple_crtc_helper_funcs);
+	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
 
 	encoder = devm_kzalloc(&pdev->dev, sizeof(*encoder), GFP_KERNEL);
-	encoder->possible_crtcs = drm_crtc_mask(crtc);
+	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
 	ret = drm_encoder_init(&apple->drm, encoder, &apple_encoder_funcs,
 			       DRM_MODE_ENCODER_TMDS /* XXX */, "apple_hdmi");
 	if (ret)
