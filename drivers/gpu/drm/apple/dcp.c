@@ -46,6 +46,7 @@ struct dcp_cb_channel {
 struct apple_dcp {
 	struct device *dev;
 	struct apple_rtkit *rtk;
+	struct apple_drm_private *apple;
 
 	/* DCP shared memory */
 	void *shmem;
@@ -191,6 +192,12 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 /* DCP callback handlers */
 static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
+	return true;
+}
+
+static bool dcpep_cb_swap_complete(struct apple_dcp *dcp, void *out, void *in)
+{
+	apple_crtc_vblank(dcp->apple);
 	return true;
 }
 
@@ -414,7 +421,7 @@ struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[574] = {"power_up_dart", dcpep_cb_zero },
 	[576] = {"hotplug_notify_gated", dcpep_cb_nop },
 	[577] = {"powerstate_notify", dcpep_cb_nop },
-	[589] = {"swap_complete_ap_gated", dcpep_cb_nop },
+	[589] = {"swap_complete_ap_gated", dcpep_cb_swap_complete },
 	[591] = {"swap_complete_intent_gated", dcpep_cb_nop },
 	[598] = {"find_swap_function_gated", dcpep_cb_nop },
 };
@@ -637,6 +644,13 @@ static struct apple_rtkit_ops rtkit_ops = {
 	.shmem_verify = dummy_shmem_verify,
 	.recv_message = dcp_got_msg,
 };
+
+void dcp_link(struct platform_device *pdev, struct apple_drm_private *apple)
+{
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+
+	dcp->apple = apple;
+}
 
 static int dcp_platform_probe(struct platform_device *pdev)
 {

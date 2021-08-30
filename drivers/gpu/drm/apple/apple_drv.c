@@ -31,18 +31,15 @@
 #include <drm/drm_modeset_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
+#include <drm/drm_vblank.h>
 
 #include "dcp.h"
-
-#define DISP0_FORMAT 0x30
-#define    DISP0_FORMAT_BGRA 0x5000
-#define DISP0_FRAMEBUFFER_0 0x54
-#define DISP0_FRAMEBUFFER_1 0x58
-#define DISP0_FRAMEBUFFER_2 0x5c
 
 struct apple_drm_private {
 	struct drm_device drm;
 	struct platform_device *dcp;
+	struct drm_crtc *crtc;
+	struct drm_pending_vblank_event **event;
 };
 
 #define to_apple_drm_private(x) \
@@ -128,6 +125,18 @@ struct drm_plane *apple_plane_init(struct drm_device *dev)
 	return plane;
 }
 
+/* vblanks are purely imaginary in DCP land */
+
+static int apple_enable_vblank(struct drm_crtc *crtc)
+{
+	return 0;
+}
+
+static void apple_disable_vblank(struct drm_crtc *crtc)
+{
+	/* nothing to do */
+}
+
 static const struct drm_crtc_funcs apple_crtc_funcs = {
 	.atomic_destroy_state	= drm_atomic_helper_crtc_destroy_state,
 	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
@@ -135,6 +144,8 @@ static const struct drm_crtc_funcs apple_crtc_funcs = {
 	.page_flip		= drm_atomic_helper_page_flip,
 	.reset			= drm_atomic_helper_crtc_reset,
 	.set_config             = drm_atomic_helper_set_config,
+	.enable_vblank		= apple_enable_vblank,
+	.disable_vblank		= apple_disable_vblank,
 };
 
 static void apple_encoder_destroy(struct drm_encoder *encoder)
@@ -217,13 +228,20 @@ struct drm_connector_helper_funcs apple_connector_helper_funcs = {
 static void apple_crtc_atomic_enable(struct drm_crtc *crtc,
 				     struct drm_atomic_state *state)
 {
-	/* TODO */
+	drm_crtc_vblank_on(crtc);
 }
 
 static void apple_crtc_atomic_disable(struct drm_crtc *crtc,
 				      struct drm_atomic_state *state)
 {
-	/* TODO */
+	drm_crtc_vblank_off(crtc);
+
+	if (crtc->state->event) {
+		spin_lock_irq(&crtc->dev->event_lock);
+		drm_crtc_send_vblank_event(crtc, crtc->state->event);
+		crtc->state->event = NULL;
+		spin_unlock_irq(&crtc->dev->event_lock);
+	}
 }
 
 static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
@@ -232,14 +250,34 @@ static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 	/* TODO */
 }
 
+void apple_crtc_vblank(struct apple_drm_private *apple)
+{
+	struct drm_pending_vblank_event **event = apple->event;
+	unsigned long flags;
+
+	printk("vblanking %u\n", event && *event);
+
+	drm_crtc_handle_vblank(apple->crtc);
+
+	spin_lock_irqsave(&apple->drm.event_lock, flags);
+	if (event && *event) {
+		drm_crtc_send_vblank_event(apple->crtc, *event);
+		*event = NULL;
+	}
+	spin_unlock_irqrestore(&apple->drm.event_lock, flags);
+}
+
 static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
 	struct apple_drm_private *apple = to_apple_drm_private(crtc->dev);
+	struct drm_crtc_state *new_state;
 	struct drm_plane *plane;
 	struct drm_plane_state *plane_state;
 	dma_addr_t dva[3] = { 0 };
 	int i;
+
+	new_state = drm_atomic_get_new_crtc_state(state, crtc);
 
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
@@ -247,9 +285,9 @@ static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 		dva[i] = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
 	}
 
-	dcp_swap(apple->dcp, dva);
+	apple->event = &new_state->event;
 
-	msleep(100);
+	dcp_swap(apple->dcp, dva);
 }
 
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
@@ -287,18 +325,22 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (!dcp_is_initialized(dcp))
 		return -EPROBE_DEFER;
 
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	if (ret)
+		return ret;
+
 	apple = devm_drm_dev_alloc(&pdev->dev, &apple_drm_driver,
 				   struct apple_drm_private, drm);
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
 
 	apple->dcp = dcp;
+	dcp_link(dcp, apple);
 
 	printk("Got DCP node %px\n", dcp_node);
 	printk("Got DCP device %px\n", apple->dcp);
 
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
-
+	ret = drm_vblank_init(&apple->drm, 1);
 	if (ret)
 		return ret;
 
@@ -350,6 +392,9 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	drm_mode_config_reset(&apple->drm); // TODO: needed?
 
+	apple->crtc = crtc;
+
+#if 0
 	/*
 	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
 	 * located anywhere in RAM
@@ -357,6 +402,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
+#endif
 
 	ret = drm_dev_register(&apple->drm, 0);
 	if (ret)
