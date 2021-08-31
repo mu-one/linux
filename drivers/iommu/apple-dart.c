@@ -751,6 +751,29 @@ static int apple_dart_def_domain_type(struct device *dev)
 	return 0;
 }
 
+static void apple_dart_get_resv_regions(struct device *dev, struct list_head *head)
+{
+	struct apple_dart_master_cfg *cfg = dev_iommu_priv_get(dev);
+	struct apple_dart *dart = cfg->stream_maps[0].dart;
+	struct iommu_resv_region *reg;
+
+	if (!dart->locked)
+		return;
+
+	// dcp:            5800000
+	// disp stream 0:  5740000
+	// disp stream 4:  5800000
+
+	reg = iommu_alloc_resv_region(0x0, 0x05800000ULL,
+				      IOMMU_READ | IOMMU_WRITE | IOMMU_NOEXEC,
+				      IOMMU_RESV_RESERVED);
+
+	if (!reg)
+		return;
+
+	list_add_tail(&reg->list, head);
+}
+
 static const struct iommu_ops apple_dart_iommu_ops = {
 	.domain_alloc = apple_dart_domain_alloc,
 	.domain_free = apple_dart_domain_free,
@@ -767,6 +790,7 @@ static const struct iommu_ops apple_dart_iommu_ops = {
 	.device_group = apple_dart_device_group,
 	.of_xlate = apple_dart_of_xlate,
 	.def_domain_type = apple_dart_def_domain_type,
+	.get_resv_regions = apple_dart_get_resv_regions,
 	.pgsize_bitmap = -1UL, /* Restricted during dart probe */
 };
 
