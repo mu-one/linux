@@ -91,17 +91,17 @@ static inline u64
 dcpep_set_shmem(u64 dart_va)
 {
 	return (DCPEP_TYPE_SET_SHMEM << DCPEP_TYPE_SHIFT) |
-		(DCPEP_FLAG_VALUE << DCPEP_FLAG_SHIFT) |
-		(dart_va << DCPEP_DVA_SHIFT);
+	       (DCPEP_FLAG_VALUE << DCPEP_FLAG_SHIFT) |
+	       (dart_va << DCPEP_DVA_SHIFT);
 }
 
 static inline u64
 dcpep_msg(enum dcp_context_id id, u32 length, u16 offset)
 {
 	return (DCPEP_TYPE_MESSAGE << DCPEP_TYPE_SHIFT) |
-		((u64) id << DCPEP_CONTEXT_SHIFT) |
-		((u64) offset << DCPEP_OFFSET_SHIFT) |
-		((u64) length << DCPEP_LENGTH_SHIFT);
+	       ((u64) id << DCPEP_CONTEXT_SHIFT) |
+	       ((u64) offset << DCPEP_OFFSET_SHIFT) |
+	       ((u64) length << DCPEP_LENGTH_SHIFT);
 }
 
 static inline u64
@@ -137,7 +137,7 @@ struct dcp_rect {
   */
 #define DCP_REMOVE_LAYERS BIT(31)
 
-struct dcp_iomfbswaprec {
+struct dcp_iomfbswap {
 	u64 unk0[8];
 	u64 flags1;
 	u64 flags2;
@@ -320,13 +320,13 @@ struct dcp_swap_start_resp {
 } __packed;
 
 struct dcp_swap_submit_req {
-	struct dcp_iomfbswaprec swap_rec;
+	struct dcp_iomfbswap swap;
 	struct dcp_iosurface surf[SWAP_SURFACES];
 	u32 surf_iova[SWAP_SURFACES];
 	u8 unkbool;
 	u64 unkdouble;
 	u32 unkint;
-	u8 swap_rec_null;
+	u8 swap_null;
 	u8 surf_null[SWAP_SURFACES];
 	u8 unkoutbool_null;
 	u8 padding[2];

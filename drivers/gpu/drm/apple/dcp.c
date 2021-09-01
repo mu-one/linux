@@ -667,7 +667,7 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 	struct dcp_swap_start_resp *resp = data;
 	struct dcp_swap_submit_req *req = cookie;
 
-	req->swap_rec.swap_id = resp->swap_id;
+	req->swap.swap_id = resp->swap_id;
 
 	dcp_push(dcp, false, dcp_swap_submit,
 		 sizeof(struct dcp_swap_submit_req),
@@ -724,14 +724,14 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 		drm_rect_fp_to_int(&src_rect, &plane_state->src);
 
-		req->swap_rec.src_rect[l] = drm_to_dcp_rect(&src_rect);
-		req->swap_rec.dst_rect[l] = drm_to_dcp_rect(&plane_state->dst);
+		req->swap.src_rect[l] = drm_to_dcp_rect(&src_rect);
+		req->swap.dst_rect[l] = drm_to_dcp_rect(&plane_state->dst);
 
-		req->swap_rec.surf_flags[l] = 1;
-		req->swap_rec.surf_ids[l] = 3 + i; // XXX
+		req->swap.surf_flags[l] = 1;
+		req->swap.surf_ids[l] = 3 + i; // XXX
 
-		req->swap_rec.swap_enabled |= BIT(l);
-		req->swap_rec.swap_completed |= BIT(l);
+		req->swap.swap_enabled |= BIT(l);
+		req->swap.swap_completed |= BIT(l);
 
 		req->surf[l] = (struct dcp_iosurface) {
 			.format = fmt->dcp,
@@ -739,7 +739,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 			.width = fb->width,
 			.height = fb->height,
 			.buf_size = fb->height * fb->pitches[0],
-			.surface_id = req->swap_rec.surf_ids[l],
+			.surface_id = req->swap.surf_ids[l],
 
 			.pix_size = 1,
 			.pel_w = 1,
@@ -763,8 +763,8 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
  	 * corresponding to the layers that actually changed. This might be
  	 * more efficient.
  	 */
-	req->swap_rec.swap_enabled |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
-	req->swap_rec.swap_completed |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
+	req->swap.swap_enabled |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
+	req->swap.swap_completed |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
 
 	WARN_ON(!dcp->active);
 
@@ -882,7 +882,7 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 	BUILD_BUG_ON(sizeof(struct dcp_rect) != 0x10);
 	BUILD_BUG_ON(sizeof(struct dcp_iouserclient) != 0x10);
-	BUILD_BUG_ON(sizeof(struct dcp_iomfbswaprec) != 0x274);
+	BUILD_BUG_ON(sizeof(struct dcp_iomfbswap) != 0x274);
 	BUILD_BUG_ON(sizeof(struct dcp_plane_info) != 0x50);
 	BUILD_BUG_ON(sizeof(struct dcp_component_types) != 0x8);
 	BUILD_BUG_ON(sizeof(struct dcp_iosurface) != 0x204);
