@@ -869,15 +869,15 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->surf_null[nr_layers] = true;
 
 	/*
- 	 * Bitmap of layers to update. Bit 31 indicates that a layer (may) be
- 	 * deleted, which is required to unmap without faults.
+	 * Bitmap of layers to update. Removing layers is required to unmap
+	 * framebuffers without faults.
  	 *
  	 * TODO: dirty track all the things! macOS only sets the bits
  	 * corresponding to the layers that actually changed. This might be
  	 * more efficient.
  	 */
-	req->swap_rec.swap_enabled = BIT(31) | BIT(0) | BIT(1);
-	req->swap_rec.swap_completed |= BIT(31) | BIT(0) | BIT(1);
+	req->swap_rec.swap_enabled |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
+	req->swap_rec.swap_completed |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
 
 	WARN_ON(!dcp->active);
 
