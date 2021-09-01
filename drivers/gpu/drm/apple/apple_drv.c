@@ -32,14 +32,12 @@
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_vblank.h>
+#include <drm/drm_fixed.h>
 
 #include "dcp.h"
 
 /* TODO: Workaround src rect limitations */
 #define TODO_WITH_CURSOR 1
-
-/* TODO: move to common DRM code */
-#define FRAC_16_16(mult, div)    (((mult) << 16) / (div))
 
 struct apple_crtc {
 	struct drm_crtc base;
@@ -102,8 +100,8 @@ static int apple_plane_atomic_check(struct drm_plane *plane,
 	 */
 	return drm_atomic_helper_check_plane_state(new_plane_state,
 						   crtc_state,
-						   FRAC_16_16(1, 4),
-						   FRAC_16_16(2, 1),
+						   drm_fixed_16_16(1, 4),
+						   drm_fixed_16_16(2, 1),
 						   true, true);
 }
 
