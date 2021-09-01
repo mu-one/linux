@@ -129,12 +129,7 @@ static const struct drm_plane_funcs apple_plane_funcs = {
 	.atomic_destroy_state	= drm_atomic_helper_plane_destroy_state,
 };
 
-uint32_t apple_plane_formats[] = {
-	/* TODO: More formats */
-	DRM_FORMAT_XRGB8888,
-	DRM_FORMAT_ARGB8888,
-};
-
+/* Mapping of DRM formats to DCP formats specified as a fourcc */
 uint64_t apple_format_modifiers[] = {
 	DRM_FORMAT_MOD_LINEAR,
 	DRM_FORMAT_MOD_INVALID
@@ -144,12 +139,17 @@ struct drm_plane *apple_plane_init(struct drm_device *dev, enum drm_plane_type t
 {
 	int ret;
 	struct drm_plane *plane;
+	uint32_t plane_formats[ARRAY_SIZE(dcp_formats)];
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dcp_formats); ++i)
+		plane_formats[i] = dcp_formats[i].drm;
 
 	plane = devm_kzalloc(dev->dev, sizeof(*plane), GFP_KERNEL);
 
 	ret = drm_universal_plane_init(dev, plane, 0x1, &apple_plane_funcs,
-				       apple_plane_formats,
-				       ARRAY_SIZE(apple_plane_formats),
+				       plane_formats,
+				       ARRAY_SIZE(dcp_formats),
 				       apple_format_modifiers,
 				       type, NULL);
 

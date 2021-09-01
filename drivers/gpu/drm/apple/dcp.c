@@ -16,6 +16,7 @@
 #include <linux/apple-rtkit.h>
 
 #include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_fourcc.h>
 
 #include "dcpep.h"
 #include "dcp.h"
@@ -825,6 +826,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
 		struct drm_rect src_rect;
+		const struct dcp_format *fmt = &dcp_formats[fb->format->format];
 		int l = nr_layers;
 
 		if (!fb)
@@ -846,10 +848,11 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap_rec.swap_completed |= BIT(l);
 
 		req->surf[l] = (struct dcp_iosurface) {
-			.format[0] = 'A',
-			.format[1] = 'R',
-			.format[2] = 'G',
-			.format[3] = 'B',
+			/* Swapped because of endianness of the fourcc */
+			.format[0] = fmt->dcp[3],
+			.format[1] = fmt->dcp[2],
+			.format[2] = fmt->dcp[1],
+			.format[3] = fmt->dcp[0],
 			.unk_13 = 13,
 			.unk_14 = 1,
 			.stride = fb->pitches[0],
