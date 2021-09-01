@@ -29,6 +29,12 @@
 
 #include "dcp.h"
 
+#define DRIVER_NAME     "apple"
+#define DRIVER_DESC     "Apple display controller DRM driver"
+#define DRIVER_DATE     "20210901"
+#define DRIVER_MAJOR    1
+#define DRIVER_MINOR    0
+
 /* TODO: Workaround src rect limitations */
 #define TODO_WITH_CURSOR 1
 
@@ -52,15 +58,14 @@ struct apple_drm_private {
 DEFINE_DRM_GEM_CMA_FOPS(apple_fops);
 
 static const struct drm_driver apple_drm_driver = {
-	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	.name = "apple",
-	.desc = "Apple Display Controller DRM driver",
-	.date = "20210801",
-	.major = 1,
-	.minor = 0,
-	.patchlevel = 0,
-	.fops = &apple_fops,
 	DRM_GEM_CMA_DRIVER_OPS,
+	.name			= DRIVER_NAME,
+	.desc			= DRIVER_DESC,
+	.date			= DRIVER_DATE,
+	.major			= DRIVER_MAJOR,
+	.minor			= DRIVER_MINOR,
+	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
+	.fops			= &apple_fops,
 };
 
 static int apple_plane_atomic_check(struct drm_plane *plane,
@@ -474,16 +479,16 @@ static const struct of_device_id of_match[] = {
 MODULE_DEVICE_TABLE(of, of_match);
 
 static struct platform_driver apple_platform_driver = {
-	.probe		= apple_platform_probe,
-	.remove		= apple_platform_remove,
 	.driver	= {
 		.name = "apple",
 		.of_match_table	= of_match,
 	},
+	.probe		= apple_platform_probe,
+	.remove		= apple_platform_remove,
 };
 
 module_platform_driver(apple_platform_driver);
 
 MODULE_AUTHOR("Alyssa Rosenzweig <alyssa@rosenzweig.io>");
-MODULE_DESCRIPTION("Apple Display Controller DRM driver");
+MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL v2");
