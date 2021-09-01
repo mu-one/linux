@@ -369,9 +369,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	apple->dcp = dcp;
 	dcp_link(dcp, apple);
 
-	printk("Got DCP node %px\n", dcp_node);
-	printk("Got DCP device %px\n", apple->dcp);
-
 	ret = drm_vblank_init(&apple->drm, 1);
 	if (ret)
 		return ret;
