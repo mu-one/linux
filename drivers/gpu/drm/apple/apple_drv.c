@@ -130,7 +130,7 @@ static const struct drm_plane_funcs apple_plane_funcs = {
 };
 
 /* Mapping of DRM formats to DCP formats specified as a fourcc */
-uint64_t apple_format_modifiers[] = {
+u64 apple_format_modifiers[] = {
 	DRM_FORMAT_MOD_LINEAR,
 	DRM_FORMAT_MOD_INVALID
 };
@@ -139,7 +139,7 @@ struct drm_plane *apple_plane_init(struct drm_device *dev, enum drm_plane_type t
 {
 	int ret;
 	struct drm_plane *plane;
-	uint32_t plane_formats[ARRAY_SIZE(dcp_formats)];
+	u32 plane_formats[ARRAY_SIZE(dcp_formats)];
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(dcp_formats); ++i)

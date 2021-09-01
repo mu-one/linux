@@ -80,29 +80,29 @@ enum dcpep_type {
 
 struct dcp_packet_header {
 	char tag[4];
-	uint32_t in_len;
-	uint32_t out_len;
+	u32 in_len;
+	u32 out_len;
 } __packed;
 
 #define DCP_IS_NULL(ptr) ((ptr) ? 1 : 0)
 #define DCP_PACKET_ALIGNMENT (0x40)
 
-static inline uint64_t
-dcpep_set_shmem(uint64_t dart_va)
+static inline u64
+dcpep_set_shmem(u64 dart_va)
 {
 	return (DCPEP_TYPE_SET_SHMEM << DCPEP_TYPE_SHIFT) |
 		(DCPEP_FLAG_VALUE << DCPEP_FLAG_SHIFT) |
 		(dart_va << DCPEP_DVA_SHIFT);
 }
 
-static inline uint64_t
-dcpep_msg(enum dcp_context_id id, uint32_t length, uint16_t offset, bool ack)
+static inline u64
+dcpep_msg(enum dcp_context_id id, u32 length, u16 offset, bool ack)
 {
 	return (DCPEP_TYPE_MESSAGE << DCPEP_TYPE_SHIFT) |
 		(ack ? BIT_ULL(DCPEP_ACK_SHIFT) : 0) |
-		((uint64_t) id << DCPEP_CONTEXT_SHIFT) |
-		((uint64_t) offset << DCPEP_OFFSET_SHIFT) |
-		((uint64_t) length << DCPEP_LENGTH_SHIFT);
+		((u64) id << DCPEP_CONTEXT_SHIFT) |
+		((u64) offset << DCPEP_OFFSET_SHIFT) |
+		((u64) length << DCPEP_LENGTH_SHIFT);
 }
 
 /* Structures used in v11.4 firmware (TODO: versioning as these change) */

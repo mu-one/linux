@@ -123,7 +123,7 @@ struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
 }
 
 /* Send a message to the DCP endpoint */
-static void dcpep_send(struct apple_dcp *dcp, uint64_t msg)
+static void dcpep_send(struct apple_dcp *dcp, u64 msg)
 {
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, msg);
 }
