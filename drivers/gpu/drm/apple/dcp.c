@@ -817,8 +817,6 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 
 	WARN_ON(endpoint != DCP_ENDPOINT);
 
-	dev_dbg(dcp->dev, "<- %llx\n", message);
-
 	type = (message >> DCPEP_TYPE_SHIFT) & DCPEP_TYPE_MASK;
 
 	switch (type) {
@@ -826,11 +824,9 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 		dcp_push(dcp, false, dcp_start_signal, 0, sizeof(u32), NULL,
 			 dcp_started, NULL);
 		break;
-
 	case DCPEP_TYPE_MESSAGE:
 		dcpep_got_msg(dcp, message);
 		break;
-
 	default:
 		dev_warn(dcp->dev, "Ignoring unknown type %u in message %llx\n",
 			 type, message);
