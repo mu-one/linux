@@ -98,9 +98,9 @@ struct dcp_call_channel *dcp_get_call_channel(struct apple_dcp *dcp,
  */
 static enum dcp_context_id dcp_call_context(struct apple_dcp *dcp, bool oob)
 {
-	struct dcp_call_channel *ch = oob ? &dcp->ch_oobcmd : &cp->ch_cmd;
+	u8 depth = oob ? dcp->ch_oobcmd.depth : dcp->ch_cmd.depth;
 
-	if (ch->depth)
+	if (depth)
 		return oob ? DCP_CONTEXT_OOBCB : DCP_CONTEXT_CB;
 	else
 		return oob ? DCP_CONTEXT_OOBCMD : DCP_CONTEXT_CMD;
@@ -175,7 +175,7 @@ void dcp_push(struct apple_dcp *dcp, bool oob, enum dcp_method method,
 	      u32 in_len, u32 out_len, void *data, dcp_callback_t cb,
 	      void *cookie)
 {
-	struct dcp_call_channel *ch = oob ? &dcp->ch_oobcmd : &cp->ch_cmd;
+	struct dcp_call_channel *ch = oob ? &dcp->ch_oobcmd : &dcp->ch_cmd;
 	enum dcp_context_id context = dcp_call_context(dcp, oob);
 
 	struct dcp_packet_header header = {
