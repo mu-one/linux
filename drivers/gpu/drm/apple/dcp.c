@@ -732,8 +732,7 @@ static void dump_iosurface(struct dcp_iosurface *r)
 	printk("\tTiled: %u\n", r->is_tiled);
 	printk("\tPlane count 1: %u\n", r->plane_cnt);
 	printk("\tPlane count 2: %u\n", r->plane_cnt2);
-	printk("\tFormat: %c%c%c%c\n",
-	       r->format[3], r->format[2], r->format[1], r->format[0]);
+	printk("\tFormat: %08X\n", r->format);
 
 	printk("\tStride: %u\n", r->stride);
 	printk("\tPixel size: %u\n", r->pix_size);
@@ -848,11 +847,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap_rec.swap_completed |= BIT(l);
 
 		req->surf[l] = (struct dcp_iosurface) {
-			/* Swapped because of endianness of the fourcc */
-			.format[0] = fmt->dcp[3],
-			.format[1] = fmt->dcp[2],
-			.format[2] = fmt->dcp[1],
-			.format[3] = fmt->dcp[0],
+			.format = fmt->dcp,
 			.unk_13 = 13,
 			.unk_14 = 1,
 			.stride = fb->pitches[0],
