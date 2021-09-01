@@ -124,6 +124,14 @@ struct dcp_rect {
 	u32 h;
 } __packed;
 
+/*
+ * Set in the swap_{enabled,completed} field to remove missing
+ * layers. Without this flag, the DCP will assume missing layers have
+ * not changed since the previous frame and will preserve their
+ * content.
+  */
+#define DCP_REMOVE_LAYERS BIT(31)
+
 struct dcp_iomfbswaprec {
 	u64 unk0[8];
 	u64 flags1;
