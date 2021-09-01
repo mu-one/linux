@@ -185,41 +185,23 @@ static const struct drm_crtc_funcs apple_crtc_funcs = {
 	.disable_vblank		= apple_disable_vblank,
 };
 
-static void apple_encoder_destroy(struct drm_encoder *encoder)
-{
-	drm_encoder_cleanup(encoder);
-}
-
 static const struct drm_encoder_funcs apple_encoder_funcs = {
-	.destroy        = apple_encoder_destroy,
+	.destroy	= drm_encoder_cleanup,
 };
 
 static const struct drm_mode_config_funcs apple_mode_config_funcs = {
-	.atomic_check        = drm_atomic_helper_check,
-	.atomic_commit       = drm_atomic_helper_commit,
-	.fb_create           = drm_gem_fb_create,
+	.atomic_check	= drm_atomic_helper_check,
+	.atomic_commit	= drm_atomic_helper_commit,
+	.fb_create	= drm_gem_fb_create,
 };
 
 static const struct drm_mode_config_helper_funcs apple_mode_config_helpers = {
 	.atomic_commit_tail = drm_atomic_helper_commit_tail_rpm,
 };
 
-static void apple_connector_destroy(struct drm_connector *connector)
-{
-	drm_connector_cleanup(connector);
-}
-
-static enum drm_connector_status
-apple_connector_detect(struct drm_connector *connector, bool force)
-{
-	/* TODO: stub */
-	return connector_status_connected;
-}
-
 static const struct drm_connector_funcs apple_connector_funcs = {
-	.detect			= apple_connector_detect,
 	.fill_modes		= drm_helper_probe_single_connector_modes,
-	.destroy		= apple_connector_destroy,
+	.destroy		= drm_connector_cleanup,
 	.reset			= drm_atomic_helper_connector_reset,
 	.atomic_duplicate_state	= drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state	= drm_atomic_helper_connector_destroy_state,
