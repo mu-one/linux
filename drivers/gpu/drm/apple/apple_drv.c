@@ -174,39 +174,6 @@ static void apple_disable_vblank(struct drm_crtc *crtc)
 	apple_crtc->vsync_disabled = true;
 }
 
-static const struct drm_crtc_funcs apple_crtc_funcs = {
-	.atomic_destroy_state	= drm_atomic_helper_crtc_destroy_state,
-	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
-	.destroy		= drm_crtc_cleanup,
-	.page_flip		= drm_atomic_helper_page_flip,
-	.reset			= drm_atomic_helper_crtc_reset,
-	.set_config             = drm_atomic_helper_set_config,
-	.enable_vblank		= apple_enable_vblank,
-	.disable_vblank		= apple_disable_vblank,
-};
-
-static const struct drm_encoder_funcs apple_encoder_funcs = {
-	.destroy	= drm_encoder_cleanup,
-};
-
-static const struct drm_mode_config_funcs apple_mode_config_funcs = {
-	.atomic_check	= drm_atomic_helper_check,
-	.atomic_commit	= drm_atomic_helper_commit,
-	.fb_create	= drm_gem_fb_create,
-};
-
-static const struct drm_mode_config_helper_funcs apple_mode_config_helpers = {
-	.atomic_commit_tail = drm_atomic_helper_commit_tail_rpm,
-};
-
-static const struct drm_connector_funcs apple_connector_funcs = {
-	.fill_modes		= drm_helper_probe_single_connector_modes,
-	.destroy		= drm_connector_cleanup,
-	.reset			= drm_atomic_helper_connector_reset,
-	.atomic_duplicate_state	= drm_atomic_helper_connector_duplicate_state,
-	.atomic_destroy_state	= drm_atomic_helper_connector_destroy_state,
-};
-
 static int apple_connector_get_modes(struct drm_connector *connector)
 {
 	struct drm_device *dev = connector->dev;
@@ -232,17 +199,11 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 }
 
 static int apple_connector_mode_valid(struct drm_connector *connector,
-					   struct drm_display_mode *mode)
+				      struct drm_display_mode *mode)
 {
 	/* STUB */
 	return MODE_OK;
 }
-
-static const
-struct drm_connector_helper_funcs apple_connector_helper_funcs = {
-	.get_modes	= apple_connector_get_modes,
-	.mode_valid	= apple_connector_mode_valid,
-};
 
 static void apple_crtc_atomic_enable(struct drm_crtc *crtc,
 				     struct drm_atomic_state *state)
@@ -304,11 +265,49 @@ static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 	dcp_swap(apple->dcp, state);
 }
 
+static const struct drm_crtc_funcs apple_crtc_funcs = {
+	.atomic_destroy_state	= drm_atomic_helper_crtc_destroy_state,
+	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
+	.destroy		= drm_crtc_cleanup,
+	.page_flip		= drm_atomic_helper_page_flip,
+	.reset			= drm_atomic_helper_crtc_reset,
+	.set_config             = drm_atomic_helper_set_config,
+	.enable_vblank		= apple_enable_vblank,
+	.disable_vblank		= apple_disable_vblank,
+};
+
+static const struct drm_encoder_funcs apple_encoder_funcs = {
+	.destroy		= drm_encoder_cleanup,
+};
+
+static const struct drm_mode_config_funcs apple_mode_config_funcs = {
+	.atomic_check		= drm_atomic_helper_check,
+	.atomic_commit		= drm_atomic_helper_commit,
+	.fb_create		= drm_gem_fb_create,
+};
+
+static const struct drm_mode_config_helper_funcs apple_mode_config_helpers = {
+	.atomic_commit_tail	= drm_atomic_helper_commit_tail_rpm,
+};
+
+static const struct drm_connector_funcs apple_connector_funcs = {
+	.fill_modes		= drm_helper_probe_single_connector_modes,
+	.destroy		= drm_connector_cleanup,
+	.reset			= drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state	= drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state	= drm_atomic_helper_connector_destroy_state,
+};
+
+static const struct drm_connector_helper_funcs apple_connector_helper_funcs = {
+	.get_modes		= apple_connector_get_modes,
+	.mode_valid		= apple_connector_mode_valid,
+};
+
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
-	.atomic_begin	= apple_crtc_atomic_begin,
-	.atomic_flush	= apple_crtc_atomic_flush,
-	.atomic_enable	= apple_crtc_atomic_enable,
-	.atomic_disable	= apple_crtc_atomic_disable,
+	.atomic_begin		= apple_crtc_atomic_begin,
+	.atomic_flush		= apple_crtc_atomic_flush,
+	.atomic_enable		= apple_crtc_atomic_enable,
+	.atomic_disable		= apple_crtc_atomic_disable,
 };
 
 static int apple_platform_probe(struct platform_device *pdev)
@@ -370,7 +369,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	apple->drm.mode_config.cursor_height = 64;
 
 	apple->drm.mode_config.funcs = &apple_mode_config_funcs;
-	apple->drm.mode_config.helper_private	= &apple_mode_config_helpers;
+	apple->drm.mode_config.helper_private = &apple_mode_config_helpers;
 
 	plane = apple_plane_init(&apple->drm, DRM_PLANE_TYPE_PRIMARY);
 
@@ -395,6 +394,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 
 	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
+	apple->crtc = crtc;
 
 	encoder = devm_kzalloc(&pdev->dev, sizeof(*encoder), GFP_KERNEL);
 	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
@@ -404,9 +404,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 
 	connector = devm_kzalloc(&pdev->dev, sizeof(*connector), GFP_KERNEL);
-
-	drm_connector_helper_add(connector,
-			&apple_connector_helper_funcs);
+	drm_connector_helper_add(connector, &apple_connector_helper_funcs);
 
 	ret = drm_connector_init(&apple->drm, connector, &apple_connector_funcs,
 				 DRM_MODE_CONNECTOR_HDMIA);
@@ -419,12 +417,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	drm_mode_config_reset(&apple->drm); // TODO: needed?
 
-	apple->crtc = crtc;
-
-	/*
-	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
-	 * located anywhere in RAM
-	 */
+	/* Remove early framebuffers (simplefb) */
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
