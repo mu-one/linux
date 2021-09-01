@@ -330,9 +330,6 @@ static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 	dma_get_sgtable(dcp->dev, &dcp->mappings[resp->mem_desc_id], buf,
 			resp->dva, resp->dva_size);
 
-	dev_info(dcp->dev, "allocated %llx bytes to (%u, %llx)\n",
-		 resp->dva_size, resp->mem_desc_id, resp->dva);
-
 	WARN_ON(resp->mem_desc_id == 0);
 	return true;
 }
@@ -784,9 +781,6 @@ EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
 static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	u32 *ret = out;
-
-	dev_info(dcp->dev, "mode set returned %u\n", *ret);
 	dcp->active = true;
 }
 
@@ -934,7 +928,6 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &shmem_iova,
 					GFP_KERNEL);
-	dev_info(dev, "shmem allocated at dva %x\n", (u32) shmem_iova);
 
 	dcpep_send(dcp, dcpep_set_shmem(shmem_iova));
 
