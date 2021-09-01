@@ -122,12 +122,6 @@ struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
 	}
 }
 
-/* Send a message to the DCP endpoint */
-static void dcpep_send(struct apple_dcp *dcp, u64 msg)
-{
-	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, msg);
-}
-
 /* Get the start of a packet: after the end of the previous packet */
 static u16 dcp_packet_start(struct dcp_call_channel *ch, u8 depth)
 {
@@ -209,7 +203,8 @@ void dcp_push(struct apple_dcp *dcp, bool oob, enum dcp_method method,
 	ch->output[depth] = out + sizeof(header) + in_len;
 	ch->end[depth] = offset + ALIGN(data_len, DCP_PACKET_ALIGNMENT);
 
-	dcpep_send(dcp, dcpep_msg(context, data_len, offset, false));
+	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
+				 dcpep_msg(context, data_len, offset, false));
 }
 
 /* Parse a callback tag "D123" into the ID 123. Returns -EINVAL on failure. */
@@ -237,7 +232,9 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 
 	dcp_pop_depth(&ch->depth);
-	dcpep_send(dcp, dcpep_msg(context, 0, 0, true));
+
+	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
+				 dcpep_msg(context, 0, 0, true));
 }
 
 /* DCP callback handlers */
@@ -941,7 +938,8 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &shmem_iova,
 					GFP_KERNEL);
 
-	dcpep_send(dcp, dcpep_set_shmem(shmem_iova));
+	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
+				 dcpep_set_shmem(shmem_iova));
 
 	if (ret)
 		return ret;
