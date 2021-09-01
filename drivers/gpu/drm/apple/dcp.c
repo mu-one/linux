@@ -433,7 +433,7 @@ static bool dcpep_cb_true(struct apple_dcp *dcp, void *out, void *in)
 {
 	u8 *resp = out;
 
-	*resp = 1;
+	*resp = true;
 	return true;
 }
 
@@ -441,17 +441,16 @@ static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
 {
 	u8 *resp = out;
 
-	*resp = 0;
+	*resp = false;
 	return true;
 }
 
-/* Returns success */
 static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	struct dcp_cb_channel *ch = &dcp->ch_cb;
 	u8 *succ = ch->output[ch->depth - 1];
 
-	*succ = 1;
+	*succ = true;
 	dcp_ack(dcp, DCP_CONTEXT_CB);
 }
 
@@ -468,7 +467,7 @@ static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
 
 static void boot_3(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	u8 v_true = 1;
+	u8 v_true = true;
 
 	dcp_push(dcp, false, dcp_flush_supports_power, sizeof(v_true), 0,
 		 &v_true, boot_4, NULL);
