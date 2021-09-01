@@ -39,12 +39,6 @@ struct dcp_cb_channel {
 
 #define DCP_MAX_MAPPINGS (128) /* should be enough */
 
-struct dcp_mapping {
-	struct sg_table sg;
-	dma_addr_t iova;
-	size_t size;
-};
-
 struct apple_dcp {
 	struct device *dev;
 	struct device *piodma;
@@ -58,7 +52,7 @@ struct apple_dcp {
 	u32 nr_mappings;
 
 	/* Indexed table of mappings */
-	struct dcp_mapping mappings[DCP_MAX_MAPPINGS];
+	struct sg_table mappings[DCP_MAX_MAPPINGS];
 
 	struct dcp_call_channel ch_cmd, ch_oobcmd;
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
@@ -280,29 +274,26 @@ static bool dcpep_cb_map_piodma(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_map_buf_resp *resp = out;
 	struct dcp_map_buf_req *req = in;
-	struct dcp_mapping *map;
+	struct sg_table *map;
 
 	if (req->buffer >= ARRAY_SIZE(dcp->mappings))
 		goto reject;
 
 	map = &dcp->mappings[req->buffer];
 
-	if (!map->sg.sgl)
+	if (!map->sgl)
 		goto reject;
 
-	/*
-	 * XNU leaks a kernel VA here. Since it's ignored by the DCP and breaks
-	 * kASLR, zero the field. The existence of this field may be an XNU bug.
-	 */
+	/* XNU leaks a kernel VA here, breaking kASLR. Don't do that. */
 	resp->vaddr = 0;
 
 	/* Use PIODMA device instead of DCP to map against the right IOMMU. */
-	resp->ret = dma_map_sgtable(dcp->piodma, &map->sg, DMA_BIDIRECTIONAL, 0);
+	resp->ret = dma_map_sgtable(dcp->piodma, map, DMA_BIDIRECTIONAL, 0);
 
 	if (resp->ret)
 		dev_warn(dcp->dev, "failed to map for piodma %d\n", resp->ret);
 	else
-		resp->dva = sg_dma_address(map->sg.sgl);
+		resp->dva = sg_dma_address(map->sgl);
 
 	resp->ret = 0;
 	return true;
@@ -336,12 +327,7 @@ static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 	buf = dma_alloc_coherent(dcp->dev, resp->dva_size, &resp->dva,
 				 GFP_KERNEL);
 
-	dcp->mappings[resp->mem_desc_id] = (struct dcp_mapping) {
-		.iova = resp->dva,
-		.size = resp->dva_size
-	};
-
-	dma_get_sgtable(dcp->dev, &dcp->mappings[resp->mem_desc_id].sg, buf,
+	dma_get_sgtable(dcp->dev, &dcp->mappings[resp->mem_desc_id], buf,
 			resp->dva, resp->dva_size);
 
 	dev_info(dcp->dev, "allocated %llx bytes to (%u, %llx)\n",
