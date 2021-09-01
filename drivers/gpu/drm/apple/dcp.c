@@ -90,6 +90,22 @@ struct dcp_call_channel *dcp_get_call_channel(struct apple_dcp *dcp,
 	}
 }
 
+/*
+ * Get the context ID passed to the DCP for a command we push. The rule is
+ * simple: callback contexts are used when replying to the DCP, command
+ * contexts are used otherwise. That corresponds to a non/zero call stack
+ * depth. This rule frees the caller from tracking the call context manually.
+ */
+static enum dcp_context_id dcp_call_context(struct apple_dcp *dcp, bool oob)
+{
+	struct dcp_call_channel *ch = oob ? &dcp->ch_oobcmd : &cp->ch_cmd;
+
+	if (ch->depth)
+		return oob ? DCP_CONTEXT_OOBCB : DCP_CONTEXT_CB;
+	else
+		return oob ? DCP_CONTEXT_OOBCMD : DCP_CONTEXT_CMD;
+}
+
 /* Get a callback channel for a context */
 struct dcp_cb_channel *dcp_get_cb_channel(struct apple_dcp *dcp,
 					  enum dcp_context_id context)
@@ -155,11 +171,12 @@ struct dcp_method_entry dcp_methods[dcp_num_methods] = {
 };
 
 /* Call a DCP function given by a tag */
-void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
-	      enum dcp_method method, u32 in_len, u32 out_len, void *data,
-	      dcp_callback_t cb, void *cookie)
+void dcp_push(struct apple_dcp *dcp, bool oob, enum dcp_method method,
+	      u32 in_len, u32 out_len, void *data, dcp_callback_t cb,
+	      void *cookie)
 {
-	struct dcp_call_channel *ch = dcp_get_call_channel(dcp, context);
+	struct dcp_call_channel *ch = oob ? &dcp->ch_oobcmd : &cp->ch_cmd;
+	enum dcp_context_id context = dcp_call_context(dcp, oob);
 
 	struct dcp_packet_header header = {
 		.in_len = in_len,
@@ -443,37 +460,36 @@ static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 
 static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, dcp_set_display_refresh_properties, 0,
+	dcp_push(dcp, false, dcp_set_display_refresh_properties, 0,
 		 4, NULL, boot_done, NULL);
 }
 
 static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, dcp_late_init_signal, 0, 4, NULL,
-		 boot_5, NULL);
+	dcp_push(dcp, false, dcp_late_init_signal, 0, 4, NULL, boot_5, NULL);
 }
 
 static void boot_3(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	u8 v_true = 1;
 
-	dcp_push(dcp, DCP_CONTEXT_CB, dcp_flush_supports_power, sizeof(v_true), 0,
+	dcp_push(dcp, false, dcp_flush_supports_power, sizeof(v_true), 0,
 		 &v_true, boot_4, NULL);
 }
 
 static void boot_2(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, dcp_setup_video_limits, 0, 0, NULL, boot_3, NULL);
+	dcp_push(dcp, false, dcp_setup_video_limits, 0, 0, NULL, boot_3, NULL);
 }
 
 static void boot_1_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, dcp_create_default_fb, 0, sizeof(u32), NULL, boot_2, NULL);
+	dcp_push(dcp, false, dcp_create_default_fb, 0, sizeof(u32), NULL, boot_2, NULL);
 }
 
 static bool dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
 {
-	dcp_push(dcp, DCP_CONTEXT_CB, dcp_set_create_dfb, 0, 0, NULL, boot_1_5, NULL);
+	dcp_push(dcp, false, dcp_set_create_dfb, 0, 0, NULL, boot_1_5, NULL);
 	return false;
 }
 
@@ -665,7 +681,7 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	req->swap_rec.swap_id = resp->swap_id;
 
-	dcp_push(dcp, DCP_CONTEXT_CMD, dcp_swap_submit,
+	dcp_push(dcp, false, dcp_swap_submit,
 		 sizeof(struct dcp_swap_submit_req),
 		 sizeof(struct dcp_swap_submit_resp),
 		 req, dcp_swapped, NULL);
@@ -764,7 +780,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	WARN_ON(!dcp->active);
 
-	dcp_push(dcp, DCP_CONTEXT_CMD, dcp_swap_start,
+	dcp_push(dcp, false, dcp_swap_start,
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
 		 &req, dcp_swap_started, req);
@@ -791,7 +807,7 @@ static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 		.mode1 = 0x45
 	};
 
-	dcp_push(dcp, DCP_CONTEXT_CMD, dcp_set_digital_out_mode, sizeof(req),
+	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
 		 sizeof(u32), &req, modeset_done, NULL);
 }
 
@@ -802,7 +818,7 @@ static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
 
-	dcp_push(dcp, DCP_CONTEXT_CMD, dcp_set_display_device, sizeof(handle),
+	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
 		 sizeof(u32), &handle, dcp_set_4k, NULL);
 }
 
@@ -819,8 +835,8 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 
 	switch (type) {
 	case DCPEP_TYPE_INITIALIZED:
-		dcp_push(dcp, DCP_CONTEXT_CMD, dcp_start_signal, 0, sizeof(u32),
-			 NULL, dcp_started, NULL);
+		dcp_push(dcp, false, dcp_start_signal, 0, sizeof(u32), NULL,
+			 dcp_started, NULL);
 		break;
 
 	case DCPEP_TYPE_MESSAGE:
