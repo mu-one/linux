@@ -168,7 +168,7 @@ struct dcp_iosurface {
 	u8 unk_2;
 	u32 plane_cnt;
 	u32 plane_cnt2;
-	char format[4]; /* DCP fourcc */
+	u32 format; /* DCP fourcc */
 	u32 unk_f;
 	u8 unk_13;
 	u8 unk_14;

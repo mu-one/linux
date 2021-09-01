@@ -12,14 +12,14 @@ struct apple_drm_private;
  */
 static const struct dcp_format {
 	u32 drm;
-	char dcp[4];
+	u32 dcp;
 } dcp_formats[] = {
-	{ DRM_FORMAT_XRGB8888, "BGRA" },
-	{ DRM_FORMAT_ARGB8888, "BGRA" },
-	{ DRM_FORMAT_XBGR8888, "RGBA" },
-	{ DRM_FORMAT_ABGR8888, "RGBA" },
-	{ DRM_FORMAT_BGRA8888, "ARGB" },
-	{ DRM_FORMAT_BGRX8888, "ARGB" },
+	{ DRM_FORMAT_XRGB8888, fourcc_code('A', 'R', 'G', 'B') },
+	{ DRM_FORMAT_ARGB8888, fourcc_code('A', 'R', 'G', 'B') },
+	{ DRM_FORMAT_XBGR8888, fourcc_code('A', 'B', 'G', 'R') },
+	{ DRM_FORMAT_ABGR8888, fourcc_code('A', 'B', 'G', 'R') },
+	{ DRM_FORMAT_BGRA8888, fourcc_code('B', 'G', 'R', 'A') },
+	{ DRM_FORMAT_BGRX8888, fourcc_code('B', 'G', 'R', 'A') },
 };
 
 void dcp_link(struct platform_device *pdev, struct apple_drm_private *apple);
