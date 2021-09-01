@@ -621,15 +621,12 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 
 static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 {
-	void *data;
-	int channel_offset;
-
-	bool ack;
 	enum dcp_context_id ctx_id;
 	u16 offset;
 	u32 length;
+	int channel_offset;
+	void *data;
 
-	ack = message & DCPEP_ACK;
 	ctx_id = (message & DCPEP_CONTEXT_MASK) >> DCPEP_CONTEXT_SHIFT;
 	offset = (message & DCPEP_OFFSET_MASK) >> DCPEP_OFFSET_SHIFT;
 	length = (message >> DCPEP_LENGTH_SHIFT);
@@ -643,7 +640,7 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 
 	data = dcp->shmem + channel_offset + offset;
 
-	if (ack)
+	if (message & DCPEP_ACK)
 		dcpep_handle_ack(dcp, ctx_id, data, length);
 	else
 		dcpep_handle_cb(dcp, ctx_id, data, length);
