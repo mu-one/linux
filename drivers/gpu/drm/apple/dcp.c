@@ -395,9 +395,6 @@ static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
 	struct dcp_map_reg_resp *resp = out;
 	struct dcp_map_reg_req *req = in;
 
-	char obj[5] = { 0 };
-	memcpy(&obj, req->obj, 4);
-
 	/*
 	 * XXX: values extracted from the Apple device tree
 	 * TODO: don't hardcode, get this from Linux device tree
@@ -815,15 +812,15 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	struct drm_plane_state *plane_state;
 	struct dcp_swap_submit_req *req;
 
+	int i;
+	int nr_layers = 0;
+
 	if (WARN_ONCE(dcp->swapping, "failed to wait for previous swap"))
 		return;
 
 	dcp->swapping = true;
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
-
-	int i;
-	int nr_layers = 0;
 
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
@@ -909,8 +906,6 @@ static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
 
 static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	u32 *resp = out;
-
 	struct dcp_set_digital_out_mode_req req = {
 		.mode0 = 0x69,
 		.mode1 = 0x45

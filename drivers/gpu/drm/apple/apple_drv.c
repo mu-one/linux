@@ -8,15 +8,8 @@
  */
 
 #include <linux/module.h>
-#include <linux/clk.h>
-#include <linux/component.h>
-#include <linux/delay.h>
-#include <linux/of_device.h>
-#include <linux/of_graph.h>
-#include <linux/of_reserved_mem.h>
-#include <linux/pm_runtime.h>
-#include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
+#include <linux/of_device.h>
 
 #include <drm/drm_aperture.h>
 #include <drm/drm_atomic.h>
