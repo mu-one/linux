@@ -66,7 +66,7 @@ enum dcpep_type {
 /* Message */
 #define DCPEP_TYPE_SHIFT (0)
 #define DCPEP_TYPE_MASK GENMASK(1, 0)
-#define DCPEP_ACK_SHIFT (6)
+#define DCPEP_ACK BIT_ULL(6)
 #define DCPEP_CONTEXT_SHIFT (8)
 #define DCPEP_CONTEXT_MASK GENMASK(11, 8)
 #define DCPEP_OFFSET_SHIFT (16)
@@ -96,13 +96,18 @@ dcpep_set_shmem(u64 dart_va)
 }
 
 static inline u64
-dcpep_msg(enum dcp_context_id id, u32 length, u16 offset, bool ack)
+dcpep_msg(enum dcp_context_id id, u32 length, u16 offset)
 {
 	return (DCPEP_TYPE_MESSAGE << DCPEP_TYPE_SHIFT) |
-		(ack ? BIT_ULL(DCPEP_ACK_SHIFT) : 0) |
 		((u64) id << DCPEP_CONTEXT_SHIFT) |
 		((u64) offset << DCPEP_OFFSET_SHIFT) |
 		((u64) length << DCPEP_LENGTH_SHIFT);
+}
+
+static inline u64
+dcpep_ack(enum dcp_context_id id)
+{
+	return dcpep_msg(id, 0, 0) | DCPEP_ACK;
 }
 
 /* Structures used in v11.4 firmware (TODO: versioning as these change) */
