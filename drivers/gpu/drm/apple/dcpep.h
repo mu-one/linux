@@ -137,7 +137,7 @@ struct dcp_rect {
   */
 #define DCP_REMOVE_LAYERS BIT(31)
 
-struct dcp_iomfbswap {
+struct dcp_swap {
 	u64 unk0[8];
 	u64 flags1;
 	u64 flags2;
@@ -175,7 +175,7 @@ struct dcp_component_types {
 } __packed;
 
 /* Information describing a surface */
-struct dcp_iosurface {
+struct dcp_surface {
 	u8 is_tiled;
 	u8 unk_1;
 	u8 unk_2;
@@ -320,8 +320,8 @@ struct dcp_swap_start_resp {
 } __packed;
 
 struct dcp_swap_submit_req {
-	struct dcp_iomfbswap swap;
-	struct dcp_iosurface surf[SWAP_SURFACES];
+	struct dcp_swap swap;
+	struct dcp_surface surf[SWAP_SURFACES];
 	u32 surf_iova[SWAP_SURFACES];
 	u8 unkbool;
 	u64 unkdouble;

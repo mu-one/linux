@@ -733,7 +733,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap.swap_enabled |= BIT(l);
 		req->swap.swap_completed |= BIT(l);
 
-		req->surf[l] = (struct dcp_iosurface) {
+		req->surf[l] = (struct dcp_surface) {
 			.format = fmt->dcp,
 			.stride = fb->pitches[0],
 			.width = fb->width,
@@ -741,6 +741,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 			.buf_size = fb->height * fb->pitches[0],
 			.surface_id = req->swap.surf_ids[l],
 
+			/* Only used for compressed or multiplanar surfaces */
 			.pix_size = 1,
 			.pel_w = 1,
 			.pel_h = 1,
@@ -882,10 +883,10 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 	BUILD_BUG_ON(sizeof(struct dcp_rect) != 0x10);
 	BUILD_BUG_ON(sizeof(struct dcp_iouserclient) != 0x10);
-	BUILD_BUG_ON(sizeof(struct dcp_iomfbswap) != 0x274);
+	BUILD_BUG_ON(sizeof(struct dcp_swap) != 0x274);
 	BUILD_BUG_ON(sizeof(struct dcp_plane_info) != 0x50);
 	BUILD_BUG_ON(sizeof(struct dcp_component_types) != 0x8);
-	BUILD_BUG_ON(sizeof(struct dcp_iosurface) != 0x204);
+	BUILD_BUG_ON(sizeof(struct dcp_surface) != 0x204);
 	BUILD_BUG_ON(sizeof(struct dcp_swap_start_req) != 0x18);
 	BUILD_BUG_ON(sizeof(struct dcp_swap_start_resp) != 0x18);
 	BUILD_BUG_ON(sizeof(struct dcp_swap_submit_req) != 0x8a0);
