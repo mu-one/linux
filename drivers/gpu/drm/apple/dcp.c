@@ -489,9 +489,9 @@ static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *
 	struct dcp_rt_bandwidth *data = out;
 
 	*data = (struct dcp_rt_bandwidth) {
-            .reg1 = 0x23b738014, // reg[5] in disp0/dispext0, plus 0x14 - part of pmgr
-            .reg2 = 0x23bc3c000, // reg[6] in disp0/dispext0 - part of pmp/pmgr
-            .bit = 2,
+            .reg_scratch = 0x23b738014, // reg[5] in disp0/dispext0, plus 0x14 - part of pmgr
+            .reg_doorbell = 0x23bc3c000, // reg[6] in disp0/dispext0 - part of pmp/pmgr
+            .doorbell_bit = 2,
 	};
 
 	BUILD_BUG_ON(sizeof(*data) != 0x3C);

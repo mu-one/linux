@@ -203,10 +203,10 @@ struct dcp_iosurface {
 
 struct dcp_rt_bandwidth {
 	u64 unk1;
-	u64 reg1;
-	u64 reg2;
+	u64 reg_scratch;
+	u64 reg_doorbell;
 	u32 unk2;
-	u32 bit;
+	u32 doorbell_bit;
 	u32 padding[7];
 } __packed;
 
