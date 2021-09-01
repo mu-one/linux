@@ -68,7 +68,7 @@ struct apple_dcp {
 	struct dcp_call_channel ch_cmd, ch_oobcmd;
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
 
-	bool active;
+	bool active, swapping;
 };
 
 /* Get a call channel for a context */
@@ -233,6 +233,7 @@ static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_swap_complete(struct apple_dcp *dcp, void *out, void *in)
 {
+	dcp->swapping = false;
 	apple_crtc_vblank(dcp->apple);
 	return true;
 }
@@ -696,9 +697,9 @@ static void dcp_swapped(struct apple_dcp *dcp, void *data, void *cookie)
 
 	if (resp->ret) {
 		dev_err(dcp->dev, "swap failed! status %u\n", resp->ret);
+		dcp->swapping = false;
 		apple_crtc_vblank(dcp->apple);
 	}
-
 }
 
 
@@ -817,7 +818,14 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct drm_plane *plane;
 	struct drm_plane_state *plane_state;
-	struct dcp_swap_submit_req *req = kzalloc(sizeof(*req), GFP_KERNEL);
+	struct dcp_swap_submit_req *req;
+
+	if (WARN_ONCE(dcp->swapping, "failed to wait for previous swap"))
+		return;
+
+	dcp->swapping = true;
+
+	req = kzalloc(sizeof(*req), GFP_KERNEL);
 
 	int i;
 	int nr_layers = 0;
