@@ -848,18 +848,20 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 		req->surf[l] = (struct dcp_iosurface) {
 			.format = fmt->dcp,
-			.unk_13 = 13,
-			.unk_14 = 1,
 			.stride = fb->pitches[0],
-			.pix_size = 1,
-			.pel_w = 1,
-			.pel_h = 1,
 			.width = fb->width,
 			.height = fb->height,
 			.buf_size = fb->height * fb->pitches[0],
 			.surface_id = req->swap_rec.surf_ids[l],
+
+			.pix_size = 1,
+			.pel_w = 1,
+			.pel_h = 1,
 			.has_comp = 1,
 			.has_planes = 1,
+
+			.unk_13 = 13,
+			.unk_14 = 1,
 		};
 	}
 
