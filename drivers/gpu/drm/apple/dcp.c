@@ -2,14 +2,8 @@
 /* Copyright 2021 Alyssa Rosenzweig <alyssa@rosenzweig.io> */
 
 #include <linux/module.h>
-#include <linux/clk.h>
-#include <linux/component.h>
 #include <linux/slab.h>
 #include <linux/of_device.h>
-#include <linux/of_graph.h>
-#include <linux/of_reserved_mem.h>
-#include <linux/pm_runtime.h>
-#include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
 #include <linux/align.h>
 #include <linux/apple-mailbox.h>
