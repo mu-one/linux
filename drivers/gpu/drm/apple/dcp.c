@@ -15,6 +15,8 @@
 #include <linux/apple-mailbox.h>
 #include <linux/apple-rtkit.h>
 
+#include <drm/drm_fb_cma_helper.h>
+
 #include "dcpep.h"
 #include "dcp.h"
 
@@ -810,7 +812,7 @@ struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 	};
 }
 
-void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state, dma_addr_t *dva)
+void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct drm_plane *plane;
@@ -823,12 +825,14 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state, dma_
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
 		struct drm_rect src_rect;
-		int l;
+		int l = nr_layers;
 
 		if (!fb)
 			continue;
 
-		l = nr_layers++;
+		req->surf_iova[l] = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
+
+		nr_layers++;
 
 		drm_rect_fp_to_int(&src_rect, &plane_state->src);
 
@@ -840,8 +844,6 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state, dma_
 
 		req->swap_rec.swap_enabled |= BIT(l);
 		req->swap_rec.swap_completed |= BIT(l);
-
-		req->surf_iova[l] = dva[l];
 
 		req->surf[l] = (struct dcp_iosurface) {
 			.format[0] = 'A',
@@ -866,11 +868,9 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state, dma_
 	for (; nr_layers < SWAP_SURFACES; ++nr_layers)
 		req->surf_null[nr_layers] = true;
 
-	if (!req->swap_rec.swap_enabled) {
-		/* XXX: hack: skip empty swaps since it breaks DCP, todo: make this work */
-		apple_crtc_vblank(dcp->apple);
-		return;
-	}
+	/* TODO: dirty track all the things! */
+	req->swap_rec.swap_enabled = BIT(31) | BIT(0) | BIT(1);
+	req->swap_rec.swap_completed |= BIT(31) | BIT(0) | BIT(1);
 
 	WARN_ON(!dcp->active);
 
@@ -915,12 +915,12 @@ static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	u32 *resp = data;
-	//u32 handle = 2;
+	u32 handle = 2;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
-	dcp->active = true;
-
 #if 0
+	dcp->active = true;
+#else
 	dcp_push(dcp, DCP_CONTEXT_CMD, dcp_set_display_device, sizeof(handle),
 		 sizeof(u32), &handle, dcp_set_4k, NULL);
 #endif

@@ -35,6 +35,9 @@
 
 #include "dcp.h"
 
+/* TODO: Workaround src rect limitations */
+#define TODO_WITH_CURSOR 1
+
 /* TODO: move to common DRM code */
 #define FRAC_16_16(mult, div)    (((mult) << 16) / (div))
 
@@ -234,7 +237,7 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 	/* STUB */
 
 	struct drm_display_mode dummy = {
-		DRM_SIMPLE_MODE(1920, 1080, 508, 286),
+		DRM_SIMPLE_MODE(1920*2, 1080*2, 508, 286),
 	};
 
 	dummy.clock = 60 * dummy.hdisplay * dummy.vdisplay;
@@ -320,19 +323,7 @@ static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
 	struct apple_drm_private *apple = to_apple_drm_private(crtc->dev);
-	struct drm_plane *plane;
-	struct drm_plane_state *plane_state;
-	dma_addr_t dva[3] = { 0 };
-	int i, l;
-
-	for_each_new_plane_in_state(state, plane, plane_state, i) {
-		struct drm_framebuffer *fb = plane_state->fb;
-
-		if (fb)
-			dva[l++] = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
-	}
-
-	dcp_swap(apple->dcp, state, dva);
+	dcp_swap(apple->dcp, state);
 }
 
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
@@ -347,7 +338,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	struct apple_drm_private *apple;
 	struct platform_device *dcp;
 	struct device_node *dcp_node;
-	struct drm_plane *plane, *cursor;
+	struct drm_plane *plane = NULL, *cursor = NULL;
 	struct apple_crtc *crtc;
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
@@ -413,14 +404,14 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 	}
 
-	cursor = apple_plane_init(&apple->drm, DRM_PLANE_TYPE_CURSOR);
+	if (TODO_WITH_CURSOR) {
+		cursor = apple_plane_init(&apple->drm, DRM_PLANE_TYPE_CURSOR);
 
-	if (IS_ERR(cursor)) {
-		ret = PTR_ERR(cursor);
-		goto err_unload;
+		if (IS_ERR(cursor)) {
+			ret = PTR_ERR(cursor);
+			goto err_unload;
+		}
 	}
-
-	apple_plane_init(&apple->drm, DRM_PLANE_TYPE_OVERLAY);
 
 	crtc = devm_kzalloc(&pdev->dev, sizeof(*crtc), GFP_KERNEL);
 	ret = drm_crtc_init_with_planes(&apple->drm, &crtc->base, plane, cursor,
@@ -455,7 +446,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	apple->crtc = crtc;
 
-#if 0
 	/*
 	 * Remove early framebuffers (ie. simplefb). The framebuffer can be
 	 * located anywhere in RAM
@@ -463,7 +453,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
-#endif
 
 	ret = drm_dev_register(&apple->drm, 0);
 	if (ret)
