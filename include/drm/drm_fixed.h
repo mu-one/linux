@@ -208,4 +208,9 @@ static inline s64 drm_fixp_exp(s64 x)
 	return sum;
 }
 
+static inline int drm_fixed_16_16(s32 mult, s32 div)
+{
+	return (mult << 16) / div;
+}
+
 #endif
