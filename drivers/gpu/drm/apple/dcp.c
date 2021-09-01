@@ -184,11 +184,6 @@ void dcp_push(struct apple_dcp *dcp, enum dcp_context_id context,
 
 	dev_dbg(dcp->dev, "---> %s: context %u, offset %u, depth %u\n",
 		 dcp_methods[method].name, context, offset, depth);
-#if 0
-       print_hex_dump(KERN_INFO, "dcp: ",
-                       DUMP_PREFIX_OFFSET, 16, 1,
-                       out, data_len, true);
-#endif
 
 	ch->callbacks[depth] = cb;
 	ch->cookies[depth] = cookie;
@@ -608,12 +603,6 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 
 	dev_dbg(dev, "channel %u: received callback %s\n", context, cb->name);
 
-#if 0
-       print_hex_dump(KERN_INFO, "dcp: ",
-                       DUMP_PREFIX_OFFSET, 16, 1,
-                       data, length, true);
-#endif
-
 	ch->output[depth] = out;
 	ack = cb->cb(dcp, out, in);
 
@@ -837,12 +826,9 @@ static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 	u32 handle = 2;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
-#if 0
-	dcp->active = true;
-#else
+
 	dcp_push(dcp, DCP_CONTEXT_CMD, dcp_set_display_device, sizeof(handle),
 		 sizeof(u32), &handle, dcp_set_4k, NULL);
-#endif
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
