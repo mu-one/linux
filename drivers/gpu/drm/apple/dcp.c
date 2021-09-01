@@ -204,7 +204,7 @@ void dcp_push(struct apple_dcp *dcp, bool oob, enum dcp_method method,
 	ch->end[depth] = offset + ALIGN(data_len, DCP_PACKET_ALIGNMENT);
 
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
-				 dcpep_msg(context, data_len, offset, false));
+				 dcpep_msg(context, data_len, offset));
 }
 
 /* Parse a callback tag "D123" into the ID 123. Returns -EINVAL on failure. */
@@ -232,9 +232,7 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 
 	dcp_pop_depth(&ch->depth);
-
-	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
-				 dcpep_msg(context, 0, 0, true));
+	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, dcpep_ack(context));
 }
 
 /* DCP callback handlers */
@@ -631,7 +629,7 @@ static void dcpep_got_msg(struct apple_dcp *dcp, u64 message)
 	u16 offset;
 	u32 length;
 
-	ack = message & BIT(DCPEP_ACK_SHIFT);
+	ack = message & DCPEP_ACK;
 	ctx_id = (message & DCPEP_CONTEXT_MASK) >> DCPEP_CONTEXT_SHIFT;
 	offset = (message & DCPEP_OFFSET_MASK) >> DCPEP_OFFSET_SHIFT;
 	length = (message >> DCPEP_LENGTH_SHIFT);
