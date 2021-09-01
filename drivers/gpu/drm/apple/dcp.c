@@ -66,6 +66,20 @@ struct apple_dcp {
 	bool active, swapping;
 };
 
+/*
+ * XXX: values extracted from the Apple device tree
+ * TODO: don't hardcode, get this from Linux device tree
+ */
+struct dcp_map_reg_resp disp0_registers[] = {
+	{ 0x230000000, 0x3e8000 },
+	{ 0x231320000, 0x4000 },
+	{ 0x231344000, 0x4000 },
+	{ 0x231800000, 0x800000 },
+	{ 0x23b3d0000, 0x4000 },
+	{ 0x23b738000, 0x1000 },
+	{ 0x23bc3c000, 0x1000 },
+};
+
 /* Get a call channel for a context */
 struct dcp_call_channel *dcp_get_call_channel(struct apple_dcp *dcp,
 					      enum dcp_context_id context)
@@ -337,31 +351,47 @@ static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
+/* Validate that the specified region is a display register */
+static bool is_disp0_register(u64 start, u64 end)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(disp0_registers); ++i) {
+		struct dcp_map_reg_resp reg = disp0_registers[i];
+
+		if ((start >= reg.addr) && (end <= reg.addr + reg.length))
+			return true;
+	}
+
+	return false;
+}
+
 /*
  * Map an arbitrary chunk of physical memory into the DCP's address space. As
  * stated that's a massive security hole. In practice, benevolent DCP firmware
  * only uses this to map the display registers we advertise in
  * sr_map_device_memory_with_index. As long as we bounds check against this
  * register memory, the routine is safe against malicious coprocessors.
- *
- * XXX: actually bounds check!
  */
 static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_map_physical_resp *resp = out;
 	struct dcp_map_physical_req *req = in;
 
+	/* Padding for alignment could affect bounds checking, so pad first */
 	resp->dva_size = ALIGN(req->size, 4096);
+
+	if (!is_disp0_register(req->paddr, req->paddr + resp->dva_size)) {
+		dev_err(dcp->dev, "refusing to map phys address %llx size %llx",
+			req->paddr, req->size);
+		return true;
+	}
+
 	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size,
 				     DMA_BIDIRECTIONAL, 0);
 	resp->mem_desc_id = ++dcp->nr_mappings;
 
 	WARN_ON(resp->mem_desc_id == 0);
-
-	/* XXX: need to validate the DCP is allowed to access */
-	dev_warn(dcp->dev,
-		 "dangerously mapping phys addr %llx size %llx flags %x to dva %X\n",
-		 req->paddr, req->size, req->flags, (u32) resp->dva);
 
 	return true;
 }
@@ -385,31 +415,17 @@ static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
 	struct dcp_map_reg_resp *resp = out;
 	struct dcp_map_reg_req *req = in;
 
-	/*
-	 * XXX: values extracted from the Apple device tree
-	 * TODO: don't hardcode, get this from Linux device tree
-	 */
-	struct dcp_map_reg_resp registers[] = {
-		{ 0x230000000, 0x3e8000 },
-		{ 0x231320000, 0x4000 },
-		{ 0x231344000, 0x4000 },
-		{ 0x231800000, 0x800000 },
-		{ 0x23b3d0000, 0x4000 },
-		{ 0x23b738000, 0x1000 },
-		{ 0x23bc3c000, 0x1000 },
-	};
-
 	struct dcp_map_reg_resp error = {
 		.ret = 1
 	};
 
-	if (req->index >= ARRAY_SIZE(registers)) {
+	if (req->index >= ARRAY_SIZE(disp0_registers)) {
 		dev_warn(dcp->dev, "attempted to read invalid reg index %u",
 			 req->index);
 
 		*resp = error;
 	} else {
-		*resp = registers[req->index];
+		*resp = disp0_registers[req->index];
 	}
 
 	return true;
