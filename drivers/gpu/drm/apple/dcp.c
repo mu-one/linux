@@ -695,9 +695,12 @@ struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+	struct drm_crtc *crtc;
+	struct drm_crtc_state *crtc_state;
 	struct drm_plane *plane;
 	struct drm_plane_state *plane_state;
 	struct dcp_swap_submit_req *req;
+	bool layers_unmapped = false;
 
 	int i;
 	int nr_layers = 0;
@@ -708,6 +711,10 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	dcp->swapping = true;
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
+
+	/* Better options: drm_atomic_plane_disabling, atomic_disable, ... */
+	for_each_new_crtc_in_state(state, crtc, crtc_state, i)
+		layers_unmapped |= crtc_state->planes_changed;
 
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
@@ -731,7 +738,6 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap.surf_ids[l] = 3 + i; // XXX
 
 		req->swap.swap_enabled |= BIT(l);
-		req->swap.swap_completed |= BIT(l);
 
 		req->surf[l] = (struct dcp_surface) {
 			.format = fmt->dcp,
@@ -758,14 +764,13 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	/*
 	 * Bitmap of layers to update. Removing layers is required to unmap
-	 * framebuffers without faults.
- 	 *
- 	 * TODO: dirty track all the things! macOS only sets the bits
- 	 * corresponding to the layers that actually changed. This might be
- 	 * more efficient.
- 	 */
-	req->swap.swap_enabled |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
-	req->swap.swap_completed |= DCP_REMOVE_LAYERS | BIT(0) | BIT(1);
+	 * framebuffers without faults. TODO: dirty track more finely
+	 */
+	if (layers_unmapped)
+		req->swap.swap_enabled |= DCP_REMOVE_LAYERS | GENMASK(2, 0);
+
+	/* These fields should be set together */
+	req->swap.swap_completed = req->swap.swap_enabled;
 
 	WARN_ON(!dcp->active);
 
