@@ -719,7 +719,6 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
 		struct drm_rect src_rect;
-		const struct dcp_format *fmt = &dcp_formats[fb->format->format];
 		int l = nr_layers;
 
 		if (!fb)
@@ -740,7 +739,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap.swap_enabled |= BIT(l);
 
 		req->surf[l] = (struct dcp_surface) {
-			.format = fmt->dcp,
+			.format = dcp_formats[fb->format->format].dcp,
 			.stride = fb->pitches[0],
 			.width = fb->width,
 			.height = fb->height,
