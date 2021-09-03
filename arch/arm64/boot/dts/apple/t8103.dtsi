@@ -154,7 +154,7 @@
 		};
 
 		dcp: dcp {
-			compatible = "apple,dcp";
+			compatible = "apple,t8103-dcp";
 			mboxes = <&dcp_mbox>;
 			mbox-names = "mbox";
 			iommus = <&dcp_dart 0>;
@@ -169,7 +169,7 @@
 		};
 
 		display-subsystem {
-			compatible = "apple,t8103-dcp";
+			compatible = "apple,t8103-display";
 			iommus = <&disp_dart 0>;
 			apple,coprocessors = <&dcp>;
 		};

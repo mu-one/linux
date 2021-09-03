@@ -958,7 +958,7 @@ static int dcp_platform_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id of_match[] = {
-	{ .compatible = "apple,dcp" },
+	{ .compatible = "apple,t8103-dcp" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, of_match);

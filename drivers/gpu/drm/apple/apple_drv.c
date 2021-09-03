@@ -463,14 +463,14 @@ static int apple_platform_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id of_match[] = {
-	{ .compatible = "apple,t8103-dcp" },
+	{ .compatible = "apple,t8103-display" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, of_match);
 
 static struct platform_driver apple_platform_driver = {
 	.driver	= {
-		.name = "apple",
+		.name = "apple-drm",
 		.of_match_table	= of_match,
 	},
 	.probe		= apple_platform_probe,
