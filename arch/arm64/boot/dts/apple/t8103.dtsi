@@ -171,7 +171,7 @@
 		display-subsystem {
 			compatible = "apple,t8103-dcp";
 			iommus = <&disp_dart 0>;
-			coprocessor = <&dcp>;
+			apple,coprocessors = <&dcp>;
 		};
 
 		serial0: serial@235200000 {

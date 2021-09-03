@@ -35,8 +35,8 @@
 #define DRIVER_MAJOR    1
 #define DRIVER_MINOR    0
 
-/* T8103 has an internal DCP and an external DCP */
-#define MAX_COPROCESSORS 2
+/* T8103 has an internal DCP and an external DCP. TODO: support external dcp */
+#define MAX_COPROCESSORS 1
 
 /* TODO: Workaround src rect limitations */
 #define TODO_WITH_CURSOR 1
@@ -309,33 +309,75 @@ static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
 	.atomic_disable		= apple_crtc_atomic_disable,
 };
 
-static int apple_platform_probe(struct platform_device *pdev)
+static int apple_probe_per_dcp(struct device *dev,
+			       struct drm_device *drm,
+			       struct platform_device *dcp,
+			       struct drm_plane *primary,
+			       struct drm_plane *cursor)
 {
-	struct apple_drm_private *apple;
-	struct platform_device *dcp;
-	struct device_node *dcp_node;
-	struct drm_plane *plane = NULL, *cursor = NULL;
 	struct apple_crtc *crtc;
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
 	int ret;
 
-	dcp_node = of_parse_phandle(pdev->dev.of_node, "coprocessor", 0);
+	crtc = devm_kzalloc(dev, sizeof(*crtc), GFP_KERNEL);
+	ret = drm_crtc_init_with_planes(drm, &crtc->base, primary, cursor,
+					&apple_crtc_funcs, NULL);
+	if (ret)
+		return ret;
 
-	if (!dcp_node)
-		return -ENODEV;
+	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
 
-	dcp = of_find_device_by_node(dcp_node);
+	crtc->dcp = dcp;
+	dcp_link(dcp, crtc);
 
-	if (!dcp)
-		return -ENODEV;
+	encoder = devm_kzalloc(dev, sizeof(*encoder), GFP_KERNEL);
+	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
+	ret = drm_encoder_init(drm, encoder, &apple_encoder_funcs,
+			       DRM_MODE_ENCODER_TMDS /* XXX */, "apple_hdmi");
+	if (ret)
+		return ret;
 
-	/* DCP needs to be initialized before KMS can come online */
-	if (!platform_get_drvdata(dcp))
-		return -EPROBE_DEFER;
+	connector = devm_kzalloc(dev, sizeof(*connector), GFP_KERNEL);
+	drm_connector_helper_add(connector, &apple_connector_helper_funcs);
 
-	if (!dcp_is_initialized(dcp))
-		return -EPROBE_DEFER;
+	ret = drm_connector_init(drm, connector, &apple_connector_funcs,
+				 DRM_MODE_CONNECTOR_HDMIA);
+	if (ret)
+		return ret;
+
+	return drm_connector_attach_encoder(connector, encoder);
+}
+
+static int apple_platform_probe(struct platform_device *pdev)
+{
+	struct apple_drm_private *apple;
+	struct platform_device *dcp[MAX_COPROCESSORS];
+	struct drm_plane *plane = NULL, *cursor = NULL;
+	int ret;
+	int i;
+
+	for (i = 0; i < MAX_COPROCESSORS; ++i) {
+		struct device_node *np;
+
+		np = of_parse_phandle(pdev->dev.of_node,
+				     "apple,coprocessors", i);
+
+		if (!np)
+			return -ENODEV;
+
+		dcp[i] = of_find_device_by_node(np);
+
+		if (!dcp[i])
+			return -ENODEV;
+
+		/* DCP needs to be initialized before KMS can come online */
+		if (!platform_get_drvdata(dcp[i]))
+			return -EPROBE_DEFER;
+
+		if (!dcp_is_initialized(dcp[i]))
+			return -EPROBE_DEFER;
+	}
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (ret)
@@ -383,35 +425,13 @@ static int apple_platform_probe(struct platform_device *pdev)
 		}
 	}
 
-	crtc = devm_kzalloc(&pdev->dev, sizeof(*crtc), GFP_KERNEL);
-	ret = drm_crtc_init_with_planes(&apple->drm, &crtc->base, plane, cursor,
-					&apple_crtc_funcs, NULL);
-	if (ret)
-		goto err_unload;
+	for (i = 0; i < MAX_COPROCESSORS; ++i) {
+		ret = apple_probe_per_dcp(&pdev->dev, &apple->drm, dcp[i],
+					  plane, cursor);
 
-	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
-
-	crtc->dcp = dcp;
-	dcp_link(dcp, crtc);
-
-	encoder = devm_kzalloc(&pdev->dev, sizeof(*encoder), GFP_KERNEL);
-	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
-	ret = drm_encoder_init(&apple->drm, encoder, &apple_encoder_funcs,
-			       DRM_MODE_ENCODER_TMDS /* XXX */, "apple_hdmi");
-	if (ret)
-		goto err_unload;
-
-	connector = devm_kzalloc(&pdev->dev, sizeof(*connector), GFP_KERNEL);
-	drm_connector_helper_add(connector, &apple_connector_helper_funcs);
-
-	ret = drm_connector_init(&apple->drm, connector, &apple_connector_funcs,
-				 DRM_MODE_CONNECTOR_HDMIA);
-	if (ret)
-		goto err_unload;
-
-	ret = drm_connector_attach_encoder(connector, encoder);
-	if (ret)
-		goto err_unload;
+		if (ret)
+			goto err_unload;
+	}
 
 	drm_mode_config_reset(&apple->drm); // TODO: needed?
 
