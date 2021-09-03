@@ -54,7 +54,6 @@ struct apple_crtc {
 
 struct apple_drm_private {
 	struct drm_device drm;
-	struct apple_crtc *crtc;
 };
 
 #define to_apple_drm_private(x) \
@@ -394,7 +393,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 
 	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
-	apple->crtc = crtc;
 
 	crtc->dcp = dcp;
 	dcp_link(dcp, crtc);
