@@ -43,7 +43,7 @@ struct apple_dcp {
 	struct device *dev;
 	struct device *piodma;
 	struct apple_rtkit *rtk;
-	struct apple_drm_private *apple;
+	struct apple_crtc *crtc;
 
 	/* DCP shared memory */
 	void *shmem;
@@ -252,7 +252,7 @@ static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_swap_complete(struct apple_dcp *dcp, void *out, void *in)
 {
-	apple_crtc_vblank(dcp->apple);
+	apple_crtc_vblank(dcp->crtc);
 	return true;
 }
 
@@ -664,7 +664,7 @@ static void dcp_swapped(struct apple_dcp *dcp, void *data, void *cookie)
 
 	if (resp->ret) {
 		dev_err(dcp->dev, "swap failed! status %u\n", resp->ret);
-		apple_crtc_vblank(dcp->apple);
+		apple_crtc_vblank(dcp->crtc);
 	}
 }
 
@@ -854,11 +854,11 @@ static struct apple_rtkit_ops rtkit_ops = {
 	.recv_message = dcp_got_msg,
 };
 
-void dcp_link(struct platform_device *pdev, struct apple_drm_private *apple)
+void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 
-	dcp->apple = apple;
+	dcp->crtc = crtc;
 }
 
 struct device *dcp_get_piodma(struct device *dev)

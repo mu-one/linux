@@ -35,6 +35,9 @@
 #define DRIVER_MAJOR    1
 #define DRIVER_MINOR    0
 
+/* T8103 has an internal DCP and an external DCP */
+#define MAX_COPROCESSORS 2
+
 /* TODO: Workaround src rect limitations */
 #define TODO_WITH_CURSOR 1
 
@@ -42,13 +45,15 @@ struct apple_crtc {
 	struct drm_crtc base;
 	struct drm_pending_vblank_event *event;
 	bool vsync_disabled;
+
+	/* Reference to the DCP device owning this CRTC */
+	struct platform_device *dcp;
 };
 
 #define to_apple_crtc(x) container_of(x, struct apple_crtc, base)
 
 struct apple_drm_private {
 	struct drm_device drm;
-	struct platform_device *dcp;
 	struct apple_crtc *crtc;
 };
 
@@ -238,29 +243,29 @@ static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 	}
 }
 
-void apple_crtc_vblank(struct apple_drm_private *apple)
+void apple_crtc_vblank(struct apple_crtc *crtc)
 {
 	unsigned long flags;
 
-	if (apple->crtc->vsync_disabled)
+	if (crtc->vsync_disabled)
 		return;
 
-	drm_crtc_handle_vblank(&apple->crtc->base);
+	drm_crtc_handle_vblank(&crtc->base);
 
-	spin_lock_irqsave(&apple->drm.event_lock, flags);
-	if (apple->crtc->event) {
-		drm_crtc_send_vblank_event(&apple->crtc->base, apple->crtc->event);
-		drm_crtc_vblank_put(&apple->crtc->base);
-		apple->crtc->event = NULL;
+	spin_lock_irqsave(&crtc->base.dev->event_lock, flags);
+	if (crtc->event) {
+		drm_crtc_send_vblank_event(&crtc->base, crtc->event);
+		drm_crtc_vblank_put(&crtc->base);
+		crtc->event = NULL;
 	}
-	spin_unlock_irqrestore(&apple->drm.event_lock, flags);
+	spin_unlock_irqrestore(&crtc->base.dev->event_lock, flags);
 }
 
 static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
-	struct apple_drm_private *apple = to_apple_drm_private(crtc->dev);
-	dcp_swap(apple->dcp, state);
+	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
+	dcp_swap(apple_crtc->dcp, state);
 }
 
 static const struct drm_crtc_funcs apple_crtc_funcs = {
@@ -345,9 +350,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
 
-	apple->dcp = dcp;
-	dcp_link(dcp, apple);
-
 	ret = drm_vblank_init(&apple->drm, 1);
 	if (ret)
 		return ret;
@@ -393,6 +395,9 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
 	apple->crtc = crtc;
+
+	crtc->dcp = dcp;
+	dcp_link(dcp, crtc);
 
 	encoder = devm_kzalloc(&pdev->dev, sizeof(*encoder), GFP_KERNEL);
 	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
