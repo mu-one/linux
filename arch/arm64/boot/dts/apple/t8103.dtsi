@@ -169,7 +169,7 @@
 		};
 
 		display-subsystem {
-			compatible = "apple,t8103-display";
+			compatible = "apple,display-subsystem";
 			iommus = <&disp_dart 0>;
 			apple,coprocessors = <&dcp>;
 		};
