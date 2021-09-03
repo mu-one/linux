@@ -57,8 +57,17 @@ struct apple_dcp {
 	struct dcp_call_channel ch_cmd, ch_oobcmd;
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
 
-	bool active, swapping;
+	bool active;
 };
+
+/*
+ * A channel is busy if we have sent a message that has yet to be
+ * acked. The driver must not sent a message to a busy channel.
+ */
+static bool dcp_channel_busy(struct dcp_call_channel *ch)
+{
+	return (ch->depth != 0);
+}
 
 /*
  * XXX: values extracted from the Apple device tree
@@ -243,7 +252,6 @@ static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_swap_complete(struct apple_dcp *dcp, void *out, void *in)
 {
-	dcp->swapping = false;
 	apple_crtc_vblank(dcp->apple);
 	return true;
 }
@@ -605,8 +613,7 @@ static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
 	dcp_callback_t cb;
 
 	if (!ch) {
-		dev_warn(dcp->dev, "ignoring ack on unknown context %X\n",
-			 context);
+		dev_warn(dcp->dev, "ignoring ack on context %X\n", context);
 		return;
 	}
 
@@ -657,7 +664,6 @@ static void dcp_swapped(struct apple_dcp *dcp, void *data, void *cookie)
 
 	if (resp->ret) {
 		dev_err(dcp->dev, "swap failed! status %u\n", resp->ret);
-		dcp->swapping = false;
 		apple_crtc_vblank(dcp->apple);
 	}
 }
@@ -705,10 +711,8 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	int i;
 	int nr_layers = 0;
 
-	if (WARN_ONCE(dcp->swapping, "failed to wait for previous swap"))
+	if (drm_WARN(dcp_channel_busy(&dcp->ch_cmd, "unexpected busy channel")))
 		return;
-
-	dcp->swapping = true;
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
 
