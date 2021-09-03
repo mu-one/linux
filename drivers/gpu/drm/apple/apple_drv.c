@@ -56,9 +56,6 @@ struct apple_drm_private {
 	struct drm_device drm;
 };
 
-#define to_apple_drm_private(x) \
-	container_of(x, struct apple_drm_private, drm)
-
 DEFINE_DRM_GEM_CMA_FOPS(apple_fops);
 
 static const struct drm_driver apple_drm_driver = {
