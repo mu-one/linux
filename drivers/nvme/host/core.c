@@ -1027,7 +1027,10 @@ blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
 		return BLK_STS_IOERR;
 	}
 
-	nvme_req(req)->genctr++;
+	if (nvme_req(req)->ctrl->quirks & NVME_QUIRK_NO_GENCTR)
+		nvme_req(req)->genctr = 0;
+	else
+		nvme_req(req)->genctr++;
 	cmd->common.command_id = nvme_cid(req);
 	trace_nvme_setup_cmd(req, cmd);
 	return ret;
