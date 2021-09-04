@@ -145,6 +145,13 @@ enum nvme_quirks {
 	 */
 	NVME_QUIRK_NO_SCAN_NS_LIST		= (1 << 17),
 
+	/*
+	 * The controller only supports 8bits in the command tag
+	 * ID and sets higher bits to zero when returning the cmd
+	 * in the completion queues. This quirk disables the
+	 * genctr use-after-free validation.
+	 */
+	NVME_QUIRK_NO_GENCTR			= (1 << 18),
 };
 
 /*
