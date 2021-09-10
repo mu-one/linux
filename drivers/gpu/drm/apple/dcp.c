@@ -824,8 +824,8 @@ static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
 
-	modeset_done(dcp, NULL, NULL);
-#if 0
+//	modeset_done(dcp, NULL, NULL);
+#if 1
 	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
 		 sizeof(u32), &handle, dcp_set_4k, NULL);
 #endif
