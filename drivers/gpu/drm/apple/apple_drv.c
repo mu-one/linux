@@ -181,7 +181,7 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 	/* STUB */
 
 	struct drm_display_mode dummy = {
-		DRM_SIMPLE_MODE(1920*1, 1080*1, 508, 286),
+		DRM_SIMPLE_MODE(1920*2, 1080*2, 508, 286),
 	};
 
 	dummy.clock = 60 * dummy.hdisplay * dummy.vdisplay;
