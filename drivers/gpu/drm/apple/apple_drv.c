@@ -39,7 +39,7 @@
 #define MAX_COPROCESSORS 1
 
 /* TODO: Workaround src rect limitations */
-#define TODO_WITH_CURSOR 1
+#define TODO_WITH_CURSOR 0
 
 struct apple_crtc {
 	struct drm_crtc base;
@@ -207,12 +207,13 @@ static int apple_connector_mode_valid(struct drm_connector *connector,
 static void apple_crtc_atomic_enable(struct drm_crtc *crtc,
 				     struct drm_atomic_state *state)
 {
-	drm_crtc_vblank_on(crtc);
+//	drm_crtc_vblank_on(crtc);
 }
 
 static void apple_crtc_atomic_disable(struct drm_crtc *crtc,
 				      struct drm_atomic_state *state)
 {
+#if 0
 	drm_crtc_vblank_off(crtc);
 
 	if (crtc->state->event) {
@@ -221,11 +222,13 @@ static void apple_crtc_atomic_disable(struct drm_crtc *crtc,
 		crtc->state->event = NULL;
 		spin_unlock_irq(&crtc->dev->event_lock);
 	}
+#endif
 }
 
 static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
+#if 0
 	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
 	unsigned long flags;
 
@@ -237,10 +240,12 @@ static void apple_crtc_atomic_begin(struct drm_crtc *crtc,
 		spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
 		crtc->state->event = NULL;
 	}
+#endif
 }
 
 void apple_crtc_vblank(struct apple_crtc *crtc)
 {
+#if 0
 	unsigned long flags;
 
 	if (crtc->vsync_disabled)
@@ -255,6 +260,7 @@ void apple_crtc_vblank(struct apple_crtc *crtc)
 		crtc->event = NULL;
 	}
 	spin_unlock_irqrestore(&crtc->base.dev->event_lock, flags);
+#endif
 }
 
 static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
@@ -388,9 +394,11 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (IS_ERR(apple))
 		return PTR_ERR(apple);
 
+#if 0
 	ret = drm_vblank_init(&apple->drm, 1);
 	if (ret)
 		return ret;
+#endif
 
 	ret = drmm_mode_config_init(&apple->drm);
 	if (ret)
