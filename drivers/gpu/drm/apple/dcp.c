@@ -801,8 +801,8 @@ static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
 static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	struct dcp_set_digital_out_mode_req req = {
-		.mode0 = 0x69,
-		.mode1 = 0x45
+		.mode0 = 0x5a,
+		.mode1 = 0x48
 	};
 
 	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
@@ -816,7 +816,7 @@ static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
 
-	dcp->active = true;
+	modeset_done(dcp, NULL, NULL);
 #if 0
 	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
 		 sizeof(u32), &handle, dcp_set_4k, NULL);
