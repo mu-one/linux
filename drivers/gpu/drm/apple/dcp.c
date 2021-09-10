@@ -319,8 +319,8 @@ static bool dcpep_cb_map_piodma(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 
 reject:
-	dev_warn(dcp->dev, "denying map of invalid buffer %llx for pidoma\n",
-		 req->buffer);
+	dev_err(dcp->dev, "denying map of invalid buffer %llx for pidoma\n",
+		req->buffer);
 	resp->ret = EINVAL;
 	return true;
 }
