@@ -710,8 +710,10 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	int i;
 	int nr_layers = 0;
 
-	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel"))
+	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel")) {
+		apple_crtc_vblank(dcp->crtc);
 		return;
+	}
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
 
