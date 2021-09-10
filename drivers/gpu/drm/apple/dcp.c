@@ -706,7 +706,6 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	struct drm_plane *plane;
 	struct drm_plane_state *plane_state;
 	struct dcp_swap_submit_req *req;
-	bool layers_unmapped = false;
 
 	int i;
 	int nr_layers = 0;
@@ -715,10 +714,6 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		return;
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
-
-	/* Better options: drm_atomic_plane_disabling, atomic_disable, ... */
-	for_each_new_crtc_in_state(state, crtc, crtc_state, i)
-		layers_unmapped |= crtc_state->planes_changed;
 
 	for_each_new_plane_in_state(state, plane, plane_state, i) {
 		struct drm_framebuffer *fb = plane_state->fb;
@@ -768,9 +763,9 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	/*
 	 * Bitmap of layers to update. Removing layers is required to unmap
-	 * framebuffers without faults. TODO: dirty track more finely
+	 * framebuffers without faults. TODO: dirty track
 	 */
-	if (layers_unmapped)
+	if (true)
 		req->swap.swap_enabled |= DCP_REMOVE_LAYERS | GENMASK(2, 0);
 
 	/* These fields should be set together */

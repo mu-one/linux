@@ -181,7 +181,7 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 	/* STUB */
 
 	struct drm_display_mode dummy = {
-		DRM_SIMPLE_MODE(1920*2, 1080*2, 508, 286),
+		DRM_SIMPLE_MODE(1920*1, 1080*1, 508, 286),
 	};
 
 	dummy.clock = 60 * dummy.hdisplay * dummy.vdisplay;
@@ -435,12 +435,10 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	drm_mode_config_reset(&apple->drm); // TODO: needed?
 
-#if 0
 	/* Remove early framebuffers (simplefb) */
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;
-#endif
 
 	ret = drm_dev_register(&apple->drm, 0);
 	if (ret)
