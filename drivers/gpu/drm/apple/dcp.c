@@ -704,11 +704,10 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 	struct drm_crtc *crtc;
 	struct drm_crtc_state *crtc_state;
 	struct drm_plane *plane;
-	struct drm_plane_state *plane_state;
+	struct drm_plane_state *new_state, *old_state;
 	struct dcp_swap_submit_req *req;
 
-	int i;
-	int nr_layers = 0;
+	int l;
 
 	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel")) {
 		apple_crtc_vblank(dcp->crtc);
@@ -717,27 +716,31 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
 
-	for_each_new_plane_in_state(state, plane, plane_state, i) {
-		struct drm_framebuffer *fb = plane_state->fb;
+	for_each_oldnew_plane_in_state(state, plane, old_state, new_state, l) {
+		struct drm_framebuffer *fb = new_state->fb;
 		struct drm_rect src_rect;
-		int l = nr_layers;
 
-		if (!fb)
-			continue;
-
-		req->surf_iova[l] = drm_fb_cma_get_gem_addr(fb, plane_state, 0);
-
-		nr_layers++;
-
-		drm_rect_fp_to_int(&src_rect, &plane_state->src);
-
-		req->swap.src_rect[l] = drm_to_dcp_rect(&src_rect);
-		req->swap.dst_rect[l] = drm_to_dcp_rect(&plane_state->dst);
-
-		req->swap.surf_flags[l] = 1;
-		req->swap.surf_ids[l] = 3 + i; // XXX
+		WARN_ON(l >= SWAP_SURFACES);
 
 		req->swap.swap_enabled |= BIT(l);
+
+		if (!new_state->fb) {
+			if (old_state->fb)
+				req->swap.swap_enabled |= DCP_REMOVE_LAYERS;
+
+			req->surf_null[l] = true;
+			continue;
+		}
+
+		req->surf_iova[l] = drm_fb_cma_get_gem_addr(fb, new_state, 0);
+
+		drm_rect_fp_to_int(&src_rect, &new_state->src);
+
+		req->swap.src_rect[l] = drm_to_dcp_rect(&src_rect);
+		req->swap.dst_rect[l] = drm_to_dcp_rect(&new_state->dst);
+
+		req->swap.surf_flags[l] = 1;
+		req->swap.surf_ids[l] = 3 + l; // XXX
 
 		req->surf[l] = (struct dcp_surface) {
 			//.format = dcp_formats[fb->format->format].dcp,
@@ -759,16 +762,6 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 			.unk_14 = 1,
 		};
 	}
-
-	for (; nr_layers < SWAP_SURFACES; ++nr_layers)
-		req->surf_null[nr_layers] = true;
-
-	/*
-	 * Bitmap of layers to update. Removing layers is required to unmap
-	 * framebuffers without faults. TODO: dirty track
-	 */
-	if (true)
-		req->swap.swap_enabled |= DCP_REMOVE_LAYERS | GENMASK(2, 0);
 
 	/* These fields should be set together */
 	req->swap.swap_completed = req->swap.swap_enabled;
