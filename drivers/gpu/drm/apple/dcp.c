@@ -315,6 +315,8 @@ static bool dcpep_cb_map_piodma(struct apple_dcp *dcp, void *out, void *in)
 	else
 		resp->dva = sg_dma_address(map->sgl);
 
+	printk("mapping %llx for piodma %X\n", req->buffer, (u32) resp->dva);
+
 	resp->ret = 0;
 	return true;
 
@@ -349,6 +351,8 @@ static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 
 	dma_get_sgtable(dcp->dev, &dcp->mappings[resp->mem_desc_id], buf,
 			resp->dva, resp->dva_size);
+
+	printk("Allocating %llx of size %u to dva %X\n", resp->mem_desc_id, resp->dva_size, resp->dva);
 
 	WARN_ON(resp->mem_desc_id == 0);
 	return true;
@@ -393,6 +397,7 @@ static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size,
 				     DMA_BIDIRECTIONAL, 0);
 	resp->mem_desc_id = ++dcp->nr_mappings;
+	printk("mapping physical %llx to dva %X\n", req->paddr, (u32) resp->dva);
 
 	WARN_ON(resp->mem_desc_id == 0);
 
