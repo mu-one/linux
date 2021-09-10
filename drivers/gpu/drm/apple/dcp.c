@@ -701,8 +701,6 @@ struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
-	struct drm_crtc *crtc;
-	struct drm_crtc_state *crtc_state;
 	struct drm_plane *plane;
 	struct drm_plane_state *new_state, *old_state;
 	struct dcp_swap_submit_req *req;
