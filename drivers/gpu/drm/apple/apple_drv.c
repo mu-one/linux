@@ -39,7 +39,7 @@
 #define MAX_COPROCESSORS 1
 
 /* TODO: Workaround src rect limitations */
-#define TODO_WITH_CURSOR 1
+#define TODO_WITH_CURSOR 0
 
 struct apple_crtc {
 	struct drm_crtc base;
