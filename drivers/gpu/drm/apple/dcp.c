@@ -743,7 +743,8 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap.swap_enabled |= BIT(l);
 
 		req->surf[l] = (struct dcp_surface) {
-			.format = dcp_formats[fb->format->format].dcp,
+			//.format = dcp_formats[fb->format->format].dcp,
+			.format = dcp_formats[0].dcp,
 			.stride = fb->pitches[0],
 			.width = fb->width,
 			.height = fb->height,
@@ -815,8 +816,11 @@ static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
 
+	dcp->active = true;
+#if 0
 	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
 		 sizeof(u32), &handle, dcp_set_4k, NULL);
+#endif
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
