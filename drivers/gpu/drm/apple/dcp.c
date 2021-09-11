@@ -518,16 +518,26 @@ static bool dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *in)
 {
-#if 0
 	struct dcp_rt_bandwidth *data = out;
 
 	*data = (struct dcp_rt_bandwidth) {
-            .reg_scratch = 0x23b738014, // reg[5] in disp0/dispext0, plus 0x14 - part of pmgr
-            .reg_doorbell = 0x23bc3c000, // reg[6] in disp0/dispext0 - part of pmp/pmgr
+#if 0
+            .reg_scratch = 0x23b738014,
+            .reg_doorbell = 0x23bc3c000,
             .doorbell_bit = 2,
-	};
 #endif
+	.unk1 = 0x44006B636F6C436CULL,
+	.reg_scratch = 0x23B738014, // reg[5] in disp0/dispext0, plus 0x14 - part of pmgr
+	.reg_doorbell = 0x23BC3C000, // reg[6] in disp0/dispext0 - part of pmp/pmgr
+	.doorbell_bit = 2,
+	.padding[1] = 0x43FB2690,
+	.padding[2] = 0xFFFFFFFF,
+	.padding[3] = 0x4,
+	.padding[4] = 0x0,
+	.padding[5] = 0x465,
+	};
 
+#if 0
 	/* XXX */
 uint8_t data[] = {
         0x6C, 0x43, 0x6C, 0x6F, 0x63, 0x6B, 0x00, 0x44, 0x14, 0x80,
@@ -539,9 +549,10 @@ uint8_t data[] = {
 };
 
 memcpy(out, data, sizeof(data));
+#endif
 
 
-	BUILD_BUG_ON(sizeof(data) != 0x3C);
+	BUILD_BUG_ON(sizeof(*data) != 0x3C);
 	return true;
 }
 
