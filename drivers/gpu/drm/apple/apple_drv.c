@@ -204,6 +204,15 @@ static int apple_connector_mode_valid(struct drm_connector *connector,
 	return MODE_OK;
 }
 
+static enum drm_connector_status
+apple_connector_detect(struct drm_connector *connector, bool force)
+{
+	struct apple_connector *apple_connector = to_apple_connector(connector);
+
+	return apple_connector->connected ? connector_status_connected :
+					    connector_status_disconnected;
+}
+
 static void apple_crtc_atomic_enable(struct drm_crtc *crtc,
 				     struct drm_atomic_state *state)
 {
@@ -296,6 +305,7 @@ static const struct drm_connector_funcs apple_connector_funcs = {
 	.reset			= drm_atomic_helper_connector_reset,
 	.atomic_duplicate_state	= drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state	= drm_atomic_helper_connector_destroy_state,
+	.detect			= apple_connector_detect,
 };
 
 static const struct drm_connector_helper_funcs apple_connector_helper_funcs = {
@@ -317,8 +327,8 @@ static int apple_probe_per_dcp(struct device *dev,
 			       struct drm_plane *cursor)
 {
 	struct apple_crtc *crtc;
+	struct apple_connector *connector;
 	struct drm_encoder *encoder;
-	struct drm_connector *connector;
 	int ret;
 
 	crtc = devm_kzalloc(dev, sizeof(*crtc), GFP_KERNEL);
@@ -329,9 +339,6 @@ static int apple_probe_per_dcp(struct device *dev,
 
 	drm_crtc_helper_add(&crtc->base, &apple_crtc_helper_funcs);
 
-	crtc->dcp = dcp;
-	dcp_link(dcp, crtc);
-
 	encoder = devm_kzalloc(dev, sizeof(*encoder), GFP_KERNEL);
 	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
 	ret = drm_encoder_init(drm, encoder, &apple_encoder_funcs,
@@ -340,14 +347,20 @@ static int apple_probe_per_dcp(struct device *dev,
 		return ret;
 
 	connector = devm_kzalloc(dev, sizeof(*connector), GFP_KERNEL);
-	drm_connector_helper_add(connector, &apple_connector_helper_funcs);
+	drm_connector_helper_add(&connector->base, &apple_connector_helper_funcs);
 
-	ret = drm_connector_init(drm, connector, &apple_connector_funcs,
+	ret = drm_connector_init(drm, &connector->base, &apple_connector_funcs,
 				 DRM_MODE_CONNECTOR_HDMIA);
 	if (ret)
 		return ret;
 
-	return drm_connector_attach_encoder(connector, encoder);
+	connector->base.polled = DRM_CONNECTOR_POLL_HPD;
+	connector->connected = true; /* XXX */
+
+	crtc->dcp = dcp;
+	dcp_link(dcp, crtc, connector);
+
+	return drm_connector_attach_encoder(&connector->base, encoder);
 }
 
 static int apple_platform_probe(struct platform_device *pdev)

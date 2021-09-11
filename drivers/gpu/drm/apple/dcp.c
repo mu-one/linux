@@ -11,6 +11,7 @@
 
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_probe_helper.h>
 
 #include "dcpep.h"
 #include "dcp.h"
@@ -44,6 +45,7 @@ struct apple_dcp {
 	struct device *piodma;
 	struct apple_rtkit *rtk;
 	struct apple_crtc *crtc;
+	struct apple_connector *connector;
 
 	/* DCP shared memory */
 	void *shmem;
@@ -560,14 +562,17 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 {
-	u64 *state = in;
+	struct apple_connector *connector = dcp->connector;
+	struct drm_device *dev = connector->base.dev;
+	u64 *connected = in;
 
-	if (*state) {
-		dev_info(dcp->dev, "cable hotplugged (%llu)", *state);
+	connector->connected = (*connected != 0);
+
+	if (connector->connected)
 		dcp_modeset(dcp);
-	} else {
-		dev_info(dcp->dev, "cable unplugged");
-	}
+
+	if (dev && dev->registered)
+		drm_kms_helper_hotplug_event(dev);
 
 	return true;
 }
@@ -891,11 +896,12 @@ static struct apple_rtkit_ops rtkit_ops = {
 	.recv_message = dcp_got_msg,
 };
 
-void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc)
+void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc, struct apple_connector *connector)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 
 	dcp->crtc = crtc;
+	dcp->connector = connector;
 }
 
 struct device *dcp_get_piodma(struct device *dev)

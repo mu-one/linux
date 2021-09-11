@@ -2,6 +2,13 @@
 
 struct apple_crtc;
 
+struct apple_connector {
+	struct drm_connector base;
+	bool connected;
+};
+
+#define to_apple_connector(x) container_of(x, struct apple_connector, base)
+
 /*
  * Table of supported formats, mapping from DRM fourccs to DCP fourccs.
  *
@@ -22,7 +29,7 @@ static const struct dcp_format {
 	{ DRM_FORMAT_BGRX8888, fourcc_code('B', 'G', 'R', 'A') },
 };
 
-void dcp_link(struct platform_device *pdev, struct apple_crtc *apple);
+void dcp_link(struct platform_device *pdev, struct apple_crtc *apple, struct apple_connector *connector);
 void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state);
 bool dcp_is_initialized(struct platform_device *pdev);
 void apple_crtc_vblank(struct apple_crtc *apple);
