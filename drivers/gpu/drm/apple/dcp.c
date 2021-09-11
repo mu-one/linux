@@ -955,7 +955,7 @@ static int dcp_platform_probe(struct platform_device *pdev)
 
 	dcp->dev = dev;
 
-	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "coproc");
 	if (!res)

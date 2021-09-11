@@ -7,7 +7,7 @@
 
 static int dcp_piodma_probe(struct platform_device *pdev)
 {
-	return dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	return dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 }
 
 static int dcp_piodma_remove(struct platform_device *pdev)
