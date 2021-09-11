@@ -10,11 +10,6 @@ static int dcp_piodma_probe(struct platform_device *pdev)
 	return dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 }
 
-static int dcp_piodma_remove(struct platform_device *pdev)
-{
-	return 0;
-}
-
 static const struct of_device_id of_match[] = {
 	{ .compatible = "apple,t8103-dcp-piodma" },
 	{}
@@ -23,7 +18,6 @@ MODULE_DEVICE_TABLE(of, of_match);
 
 static struct platform_driver dcp_piodma_platform_driver = {
 	.probe		= dcp_piodma_probe,
-	.remove		= dcp_piodma_remove,
 	.driver	= {
 		.name = "apple,t8103-dcp-piodma",
 		.of_match_table	= of_match,

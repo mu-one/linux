@@ -999,11 +999,6 @@ static void dcp_platform_shutdown(struct platform_device *pdev)
 		 &req, NULL, NULL);
 }
 
-static int dcp_platform_remove(struct platform_device *pdev)
-{
-	return 0;
-}
-
 static const struct of_device_id of_match[] = {
 	{ .compatible = "apple,t8103-dcp" },
 	{}
@@ -1012,7 +1007,6 @@ MODULE_DEVICE_TABLE(of, of_match);
 
 static struct platform_driver apple_platform_driver = {
 	.probe		= dcp_platform_probe,
-	.remove		= dcp_platform_remove,
 	.shutdown	= dcp_platform_shutdown,
 	.driver	= {
 		.name = "apple-dcp",
