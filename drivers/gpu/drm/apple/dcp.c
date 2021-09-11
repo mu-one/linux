@@ -171,6 +171,7 @@ struct dcp_method_entry dcp_methods[dcp_num_methods] = {
 	DCP_METHOD(create_default_fb, 442),
 	DCP_METHOD(set_display_refresh_properties, 459),
 	DCP_METHOD(flush_supports_power, 462),
+	DCP_METHOD(set_power_state, 467),
 };
 
 /* Call a DCP function given by a tag */
@@ -954,13 +955,27 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int dcp_platform_remove(struct platform_device *pdev)
+/*
+ * We need to shutdown DCP before tearing down the display subsystem. As Linux
+ * shutdown clobbers video memory, failing to do so crashes the DCP, flashing
+ * an annoying green screen of death.
+ */
+static void dcp_platform_shutdown(struct platform_device *pdev)
 {
-#if 0
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 
-	apple_rtkit_free(dcp->rtk);
-#endif
+	struct dcp_set_power_state_req req = {
+		/* defaults are ok */
+	};
+
+	dcp_push(dcp, false, dcp_set_power_state,
+		 sizeof(struct dcp_set_power_state_req),
+		 sizeof(struct dcp_set_power_state_resp),
+		 &req, NULL, NULL);
+}
+
+static int dcp_platform_remove(struct platform_device *pdev)
+{
 	return 0;
 }
 
@@ -973,6 +988,7 @@ MODULE_DEVICE_TABLE(of, of_match);
 static struct platform_driver apple_platform_driver = {
 	.probe		= dcp_platform_probe,
 	.remove		= dcp_platform_remove,
+	.shutdown	= dcp_platform_shutdown,
 	.driver	= {
 		.name = "apple-dcp",
 		.of_match_table	= of_match,

@@ -229,6 +229,7 @@ enum dcp_method {
 	dcp_create_default_fb,
 	dcp_set_display_refresh_properties,
 	dcp_flush_supports_power,
+	dcp_set_power_state,
 	dcp_num_methods
 };
 
@@ -350,6 +351,18 @@ struct dcp_get_uint_prop_resp {
 	u64 value;
 	u8 ret;
 	u8 padding[3];
+} __packed;
+
+struct dcp_set_power_state_req {
+	u64 unklong;
+	u8 unkbool;
+	u32 unkint_null;
+	u8 padding[2];
+} __packed;
+
+struct dcp_set_power_state_resp {
+	u32 unkint;
+	u32 ret;
 } __packed;
 
 #endif
