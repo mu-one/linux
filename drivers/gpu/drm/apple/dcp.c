@@ -247,41 +247,25 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, dcpep_ack(context));
 }
 
-static void got_hotplug(struct apple_dcp *dcp)
-{
-	struct apple_connector *connector = dcp->connector;
-	struct drm_device *dev = connector->base.dev;
-
-	if (dev && dev->registered)
-		drm_kms_helper_hotplug_event(dev);
-}
-
-static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	/* XXX: make this callback flow not awful */
-	if (dcp->active)
-		got_hotplug(dcp);
-	else
-		dcp->active = true;
-}
-
 static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 {
+	dcp_callback_t cb = cookie;
+
 	struct dcp_set_digital_out_mode_req req = {
 		.mode0 = 0x5a,
 		.mode1 = 0x48
 	};
 
 	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
-		 sizeof(u32), &req, modeset_done, NULL);
+		 sizeof(u32), &req, cb, NULL);
 }
 
-static void dcp_modeset(struct apple_dcp *dcp)
+static void dcp_modeset(struct apple_dcp *dcp, dcp_callback_t cb)
 {
 	u32 handle = 2;
 
 	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
-		 sizeof(u32), &handle, dcp_set_4k, NULL);
+		 sizeof(u32), &handle, dcp_set_4k, cb);
 }
 
 /* DCP callback handlers */
@@ -571,20 +555,26 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
-/* An explicit mode set and swap is required on hotplugging */
+static void got_hotplug(struct apple_dcp *dcp, void *data, void *cookie)
+{
+	struct apple_connector *connector = dcp->connector;
+	struct drm_device *dev = connector->base.dev;
+
+	connector->connected = !!(data);
+
+	if (dev && dev->registered)
+		drm_kms_helper_hotplug_event(dev);
+}
 
 static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 {
-	struct apple_connector *connector = dcp->connector;
 	u64 *connected = in;
 
-	connector->connected = (*connected != 0);
-
-	/* When the modeset finishes we'll report a hotplug XXX awful */
-	if (connector->connected)
-		dcp_modeset(dcp);
+	/* Mode sets are required to reenable the connector */
+	if (*connected)
+		dcp_modeset(dcp, got_hotplug);
 	else
-		got_hotplug(dcp);
+		got_hotplug(dcp, NULL, NULL);
 
 	return true;
 }
@@ -865,12 +855,17 @@ bool dcp_is_initialized(struct platform_device *pdev)
 }
 EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
+static void dcp_active(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	dcp->active = true;
+}
+
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	u32 *resp = data;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
-	dcp_modeset(dcp);
+	dcp_modeset(dcp, dcp_active);
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
