@@ -247,9 +247,22 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, dcpep_ack(context));
 }
 
+static void got_hotplug(struct apple_dcp *dcp)
+{
+	struct apple_connector *connector = dcp->connector;
+	struct drm_device *dev = connector->base.dev;
+
+	if (dev && dev->registered)
+		drm_kms_helper_hotplug_event(dev);
+}
+
 static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp->active = true;
+	/* XXX: make this callback flow not awful */
+	if (dcp->active)
+		got_hotplug(dcp);
+	else
+		dcp->active = true;
 }
 
 static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
@@ -563,16 +576,15 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct apple_connector *connector = dcp->connector;
-	struct drm_device *dev = connector->base.dev;
 	u64 *connected = in;
 
 	connector->connected = (*connected != 0);
 
+	/* When the modeset finishes we'll report a hotplug XXX awful */
 	if (connector->connected)
 		dcp_modeset(dcp);
-
-	if (dev && dev->registered)
-		drm_kms_helper_hotplug_event(dev);
+	else
+		got_hotplug(dcp);
 
 	return true;
 }
