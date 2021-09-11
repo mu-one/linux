@@ -522,6 +522,16 @@ memcpy(out, data, sizeof(data));
 	return true;
 }
 
+/* Callback to get the current time as milliseconds since the UNIX epoch */
+static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
+{
+	u64 *ms = out;
+	ktime_t time = ktime_get_real();
+
+	*ms = ktime_to_ms(time);
+	return true;
+}
+
 #define DCPEP_MAX_CB (1000)
 
 /* Represents a single callback. Name is for debug only. */
@@ -554,6 +564,7 @@ struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[201] = {"map_piodma", dcpep_cb_map_piodma },
 	[206] = {"match_pmu_service_2", dcpep_cb_true },
 	[207] = {"match_backlight_service", dcpep_cb_true },
+	[208] = {"get_calendar_time_ms", dcpep_cb_get_time },
 
 	[300] = {"pr_publish", dcpep_cb_nop },
 
