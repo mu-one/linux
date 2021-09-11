@@ -977,9 +977,6 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
 				 dcpep_set_shmem(shmem_iova));
 
-	if (ret)
-		return ret;
-
 	return ret;
 }
 
