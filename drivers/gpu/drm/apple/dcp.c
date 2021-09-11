@@ -521,11 +521,11 @@ static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *
 	struct dcp_rt_bandwidth *data = out;
 
 	*data = (struct dcp_rt_bandwidth) {
-		.unk1 = 0x44006B636F6C436CULL,
+//		.unk1 = 0x44006B636F6C436CULL,
 		.reg_scratch = 0x23B738014, // reg[5] in disp0/dispext0, plus 0x14 - part of pmgr
 		.reg_doorbell = 0x23BC3C000, // reg[6] in disp0/dispext0 - part of pmp/pmgr
 		.doorbell_bit = 2,
-		.padding[1] = 0x43FB2690,
+//		.padding[1] = 0x43FB2690,
 		.padding[2] = 0xFFFFFFFF,
 		.padding[3] = 0x4,
 		.padding[4] = 0x0,
