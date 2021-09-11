@@ -529,7 +529,7 @@ static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *
 //		.padding[2] = 0xFFFFFFFF,
 		.padding[3] = 0x4,
 		.padding[4] = 0x0,
-		.padding[5] = 0x465,
+//		.padding[5] = 0x465,
 	};
 
 	BUILD_BUG_ON(sizeof(*data) != 0x3C);
