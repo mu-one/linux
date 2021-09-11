@@ -245,6 +245,30 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, dcpep_ack(context));
 }
 
+static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	dcp->active = true;
+}
+
+static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	struct dcp_set_digital_out_mode_req req = {
+		.mode0 = 0x5a,
+		.mode1 = 0x48
+	};
+
+	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
+		 sizeof(u32), &req, modeset_done, NULL);
+}
+
+static void dcp_modeset(struct apple_dcp *dcp)
+{
+	u32 handle = 2;
+
+	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
+		 sizeof(u32), &handle, dcp_set_4k, NULL);
+}
+
 /* DCP callback handlers */
 static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
@@ -532,6 +556,22 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
+/* An explicit mode set and swap is required on hotplugging */
+
+static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
+{
+	u64 *state = in;
+
+	if (*state) {
+		dev_info(dcp->dev, "cable hotplugged (%llu)", *state);
+		dcp_modeset(dcp);
+	} else {
+		dev_info(dcp->dev, "cable unplugged");
+	}
+
+	return true;
+}
+
 #define DCPEP_MAX_CB (1000)
 
 /* Represents a single callback. Name is for debug only. */
@@ -584,7 +624,7 @@ struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[565] = {"set_property_bool", dcpep_cb_true },
 	[567] = {"set_property_str", dcpep_cb_true },
 	[574] = {"power_up_dart", dcpep_cb_zero },
-	[576] = {"hotplug_notify_gated", dcpep_cb_nop },
+	[576] = {"hotplug_notify_gated", dcpep_cb_hotplug },
 	[577] = {"powerstate_notify", dcpep_cb_nop },
 	[589] = {"swap_complete_ap_gated", dcpep_cb_swap_complete },
 	[591] = {"swap_complete_intent_gated", dcpep_cb_nop },
@@ -808,34 +848,12 @@ bool dcp_is_initialized(struct platform_device *pdev)
 }
 EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
-static void modeset_done(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	dcp->active = true;
-}
-
-static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	struct dcp_set_digital_out_mode_req req = {
-		.mode0 = 0x5a,
-		.mode1 = 0x48
-	};
-
-	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
-		 sizeof(u32), &req, modeset_done, NULL);
-}
-
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	u32 *resp = data;
-	u32 handle = 2;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
-
-//	modeset_done(dcp, NULL, NULL);
-#if 1
-	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
-		 sizeof(u32), &handle, dcp_set_4k, NULL);
-#endif
+	dcp_modeset(dcp);
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
