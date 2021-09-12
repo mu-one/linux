@@ -429,7 +429,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 			goto err_unload;
 	}
 
-	drm_mode_config_reset(&apple->drm); // TODO: needed?
+	drm_mode_config_reset(&apple->drm);
 
 	/* Remove early framebuffers (simplefb) */
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
