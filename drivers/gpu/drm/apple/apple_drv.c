@@ -127,7 +127,6 @@ static const struct drm_plane_funcs apple_plane_funcs = {
 	.atomic_destroy_state	= drm_atomic_helper_plane_destroy_state,
 };
 
-/* Mapping of DRM formats to DCP formats specified as a fourcc */
 u64 apple_format_modifiers[] = {
 	DRM_FORMAT_MOD_LINEAR,
 	DRM_FORMAT_MOD_INVALID
