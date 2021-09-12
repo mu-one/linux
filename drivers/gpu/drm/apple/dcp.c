@@ -261,8 +261,9 @@ static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 	dcp_callback_t cb = cookie;
 
 	struct dcp_set_digital_out_mode_req req = {
-		.mode0 = 0x5a,
-		.mode1 = 0x48
+		/* TODO: get from TimingElements property */
+		.dp_color_mode_id = 90,
+		.dp_timing_mode_id = 72
 	};
 
 	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),

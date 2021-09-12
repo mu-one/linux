@@ -241,8 +241,8 @@ struct dcp_method_entry {
 /* Prototypes */
 
 struct dcp_set_digital_out_mode_req {
-	u32 mode0;
-	u32 mode1;
+	u32 dp_color_mode_id;
+	u32 dp_timing_mode_id;
 } __packed;
 
 struct dcp_map_buf_req {
