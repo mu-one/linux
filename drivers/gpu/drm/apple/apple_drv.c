@@ -319,13 +319,18 @@ static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
 
 static int apple_probe_per_dcp(struct device *dev,
 			       struct drm_device *drm,
-			       struct platform_device *dcp,
-			       struct drm_plane *primary)
+			       struct platform_device *dcp)
 {
 	struct apple_crtc *crtc;
 	struct apple_connector *connector;
 	struct drm_encoder *encoder;
+	struct drm_plane *primary;
 	int ret;
+
+	primary = apple_plane_init(drm, DRM_PLANE_TYPE_PRIMARY);
+
+	if (IS_ERR(primary))
+		return PTR_ERR(primary);
 
 	crtc = devm_kzalloc(dev, sizeof(*crtc), GFP_KERNEL);
 	ret = drm_crtc_init_with_planes(drm, &crtc->base, primary, NULL,
@@ -363,7 +368,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 {
 	struct apple_drm_private *apple;
 	struct platform_device *dcp[MAX_COPROCESSORS];
-	struct drm_plane *plane = NULL;
 	int ret;
 	int i;
 
@@ -418,16 +422,8 @@ static int apple_platform_probe(struct platform_device *pdev)
 	apple->drm.mode_config.funcs = &apple_mode_config_funcs;
 	apple->drm.mode_config.helper_private = &apple_mode_config_helpers;
 
-	plane = apple_plane_init(&apple->drm, DRM_PLANE_TYPE_PRIMARY);
-
-	if (IS_ERR(plane)) {
-		ret = PTR_ERR(plane);
-		goto err_unload;
-	}
-
 	for (i = 0; i < MAX_COPROCESSORS; ++i) {
-		ret = apple_probe_per_dcp(&pdev->dev, &apple->drm, dcp[i],
-					  plane, NULL);
+		ret = apple_probe_per_dcp(&pdev->dev, &apple->drm, dcp[i]);
 
 		if (ret)
 			goto err_unload;
