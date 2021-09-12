@@ -38,6 +38,12 @@ struct dcp_cb_channel {
 	void *output[DCP_MAX_CALL_DEPTH];
 };
 
+/* Temporary backing for a chunked transfer via setDCPAVPropStart/Chunk/End */
+struct dcp_chunks {
+	size_t length;
+	void *data;
+};
+
 #define DCP_MAX_MAPPINGS (128) /* should be enough */
 
 struct apple_dcp {
@@ -58,6 +64,9 @@ struct apple_dcp {
 
 	struct dcp_call_channel ch_cmd, ch_oobcmd;
 	struct dcp_cb_channel ch_cb, ch_oobcb, ch_async;
+
+	/* Active chunked transfer. There can only be one at a time. */
+	struct dcp_chunks chunks;
 
 	bool active;
 };
@@ -472,6 +481,82 @@ static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
+/* Chunked data transfer for property dictionaries */
+static bool dcpep_cb_prop_start(struct apple_dcp *dcp, void *out, void *in)
+{
+	u32 *length = in;
+	u8 *resp = out;
+
+	*resp = false;
+
+	if (dcp->chunks.data != NULL) {
+		dev_warn(dcp->dev, "ignoring spurious transfer start\n");
+		return true;
+	}
+
+	dcp->chunks.length = *length;
+	dcp->chunks.data = devm_kzalloc(dcp->dev, *length, GFP_KERNEL);
+
+	if (!dcp->chunks.data) {
+		dcp->chunks.length = 0;
+
+		dev_warn(dcp->dev, "failed to allocate chunks\n");
+		return true;
+	}
+
+	*resp = true;
+	return true;
+}
+
+static bool dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
+{
+	struct dcp_set_dcpav_prop_chunk_req *req = in;
+	u8 *resp = out;
+	*resp = false;
+
+	if (!dcp->chunks.data) {
+		dev_warn(dcp->dev, "ignoring spurious chunk\n");
+		return true;
+	}
+
+	if (req->offset + req->length > dcp->chunks.length) {
+		dev_warn(dcp->dev, "ignoring overflowing chunk\n");
+		return true;
+	}
+
+	memcpy(dcp->chunks.data + req->offset, req->data, req->length);
+
+	*resp = true;
+	return true;
+}
+
+static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
+{
+	struct dcp_set_dcpav_prop_end_req *req = in;
+	u8 *resp = out;
+
+	if (!dcp->chunks.data) {
+		dev_warn(dcp->dev, "ignoring spurious end\n");
+		*resp = false;
+		return true;
+	}
+
+	/* TODO: parse */
+	dev_warn(dcp->dev, "transferred %s:\n", req->key);
+	print_hex_dump(KERN_INFO, "dcp: ",
+		       DUMP_PREFIX_OFFSET, 16, 1,
+		       dcp->chunks.data, min(dcp->chunks.length, 4096), true);
+
+	/* Reset for the next transfer */
+	devm_kfree(dcp->dev, dcp->chunks.data);
+	dcp->chunks.data = NULL;
+	dcp->chunks.length = 0;
+
+	*resp = true;
+	return true;
+}
+
+/* Boot sequence */
 static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	struct dcp_cb_channel *ch = &dcp->ch_cb;
@@ -588,9 +673,9 @@ struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[109] = {"create_pmu_service", dcpep_cb_true },
 	[110] = {"create_iomfb_service", dcpep_cb_true },
 	[111] = {"create_backlight_service", dcpep_cb_false },
-	[121] = {"set_dcpav_prop_start", dcpep_cb_true },
-	[122] = {"set_dcpav_prop_chunk", dcpep_cb_true },
-	[123] = {"set_dcpav_prop_end", dcpep_cb_true },
+	[121] = {"set_dcpav_prop_start", dcpep_cb_prop_start },
+	[122] = {"set_dcpav_prop_chunk", dcpep_cb_prop_chunk },
+	[123] = {"set_dcpav_prop_end", dcpep_cb_prop_end },
 	[116] = {"start_hardware_boot", dcpep_cb_boot_1 },
 	[119] = {"read_edt_data", dcpep_cb_false },
 

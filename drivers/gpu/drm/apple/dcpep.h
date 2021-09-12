@@ -365,4 +365,14 @@ struct dcp_set_power_state_resp {
 	u32 ret;
 } __packed;
 
+struct dcp_set_dcpav_prop_chunk_req {
+	char data[0x1000];
+	u32 offset;
+	u32 length;
+} __packed;
+
+struct dcp_set_dcpav_prop_end_req {
+	char key[0x40];
+} __packed;
+
 #endif
