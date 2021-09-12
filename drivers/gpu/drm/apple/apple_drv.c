@@ -411,7 +411,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 
 	/* IOMFB::UPPipeDCP_H13P::verify_surfaces produces the error "plane
- 	 * requires a minimum of 32x32 for the source buffer" if smaller */
+	 * requires a minimum of 32x32 for the source buffer" if smaller */
 	apple->drm.mode_config.min_width = 32;
 	apple->drm.mode_config.min_height = 32;
 

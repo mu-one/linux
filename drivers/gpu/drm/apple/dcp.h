@@ -16,6 +16,9 @@ struct apple_connector {
  * corresponding to DCP format "b3a8". Should a DRM format be created for this?
  *
  * TODO: DCP supports a large number of YUV formats. Support these.
+ *
+ * XXX: we don't have non-alpha formats but userspace breaks without XRGB. It
+ * doesn't matter for the primary plane but matters for cursors/overlays.
  */
 static const struct dcp_format {
 	u32 drm;
