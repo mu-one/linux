@@ -38,9 +38,6 @@
 /* T8103 has an internal DCP and an external DCP. TODO: support external dcp */
 #define MAX_COPROCESSORS 1
 
-/* TODO: Workaround src rect limitations */
-#define TODO_WITH_CURSOR 0
-
 struct apple_crtc {
 	struct drm_crtc base;
 	struct drm_pending_vblank_event *event;
@@ -323,8 +320,7 @@ static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
 static int apple_probe_per_dcp(struct device *dev,
 			       struct drm_device *drm,
 			       struct platform_device *dcp,
-			       struct drm_plane *primary,
-			       struct drm_plane *cursor)
+			       struct drm_plane *primary)
 {
 	struct apple_crtc *crtc;
 	struct apple_connector *connector;
@@ -332,7 +328,7 @@ static int apple_probe_per_dcp(struct device *dev,
 	int ret;
 
 	crtc = devm_kzalloc(dev, sizeof(*crtc), GFP_KERNEL);
-	ret = drm_crtc_init_with_planes(drm, &crtc->base, primary, cursor,
+	ret = drm_crtc_init_with_planes(drm, &crtc->base, primary, NULL,
 					&apple_crtc_funcs, NULL);
 	if (ret)
 		return ret;
@@ -367,7 +363,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 {
 	struct apple_drm_private *apple;
 	struct platform_device *dcp[MAX_COPROCESSORS];
-	struct drm_plane *plane = NULL, *cursor = NULL;
+	struct drm_plane *plane = NULL;
 	int ret;
 	int i;
 
@@ -418,8 +414,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 	/* Unknown maximum, use a safe value */
 	apple->drm.mode_config.max_width = 3840;
 	apple->drm.mode_config.max_height = 2160;
-	apple->drm.mode_config.cursor_width = 64;
-	apple->drm.mode_config.cursor_height = 64;
 
 	apple->drm.mode_config.funcs = &apple_mode_config_funcs;
 	apple->drm.mode_config.helper_private = &apple_mode_config_helpers;
@@ -431,18 +425,9 @@ static int apple_platform_probe(struct platform_device *pdev)
 		goto err_unload;
 	}
 
-	if (TODO_WITH_CURSOR) {
-		cursor = apple_plane_init(&apple->drm, DRM_PLANE_TYPE_CURSOR);
-
-		if (IS_ERR(cursor)) {
-			ret = PTR_ERR(cursor);
-			goto err_unload;
-		}
-	}
-
 	for (i = 0; i < MAX_COPROCESSORS; ++i) {
 		ret = apple_probe_per_dcp(&pdev->dev, &apple->drm, dcp[i],
-					  plane, cursor);
+					  plane, NULL);
 
 		if (ret)
 			goto err_unload;
