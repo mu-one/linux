@@ -44,6 +44,8 @@ struct apple_rtkit {
 	struct apple_rtkit_shmem ioreport_buffer;
 	struct apple_rtkit_shmem crashlog_buffer;
 
+	bool inited_crashlog;
+
 	struct apple_rtkit_shmem syslog_buffer;
 	char *syslog_msg_buffer;
 	size_t syslog_n_entries;
@@ -289,6 +291,11 @@ static void apple_rtkit_crashlog_rx(struct apple_rtkit *rtk, u64 msg)
 
 	if (type != APPLE_RTKIT_BUFFER_REQUEST) {
 		rtk_warn("Unknown crashlog message: %llx\n", msg);
+		return;
+	}
+
+	if (!rtk->inited_crashlog) {
+		rtk->inited_crashlog = true;
 		return;
 	}
 
