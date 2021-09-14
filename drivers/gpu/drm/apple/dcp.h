@@ -10,6 +10,16 @@ struct apple_connector {
 #define to_apple_connector(x) container_of(x, struct apple_connector, base)
 
 /*
+ * Represents a single display mode. These mode objects are populated at
+ * runtime based on the TimingElements dictionary sent by the DCP.
+ */
+struct apple_display_mode {
+	struct drm_display_mode mode;
+	u32 dp_color_mode_id;
+	u32 dp_timing_mode_id;
+};
+
+/*
  * Table of supported formats, mapping from DRM fourccs to DCP fourccs.
  *
  * TODO: Rather than RGB10_A2, macOS uses a biplanar RGB10_A8 format,
@@ -33,6 +43,6 @@ static const struct dcp_format {
 };
 
 void dcp_link(struct platform_device *pdev, struct apple_crtc *apple, struct apple_connector *connector);
-void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state);
+void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state);
 bool dcp_is_initialized(struct platform_device *pdev);
 void apple_crtc_vblank(struct apple_crtc *apple);

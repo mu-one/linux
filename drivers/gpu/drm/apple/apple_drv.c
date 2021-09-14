@@ -267,7 +267,8 @@ static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
 	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
-	dcp_swap(apple_crtc->dcp, state);
+
+	dcp_flush(apple_crtc->dcp, state);
 }
 
 static const struct drm_crtc_funcs apple_crtc_funcs = {
