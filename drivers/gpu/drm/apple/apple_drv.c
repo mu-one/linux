@@ -169,37 +169,6 @@ static void apple_disable_vblank(struct drm_crtc *crtc)
 	apple_crtc->vsync_disabled = true;
 }
 
-static int apple_connector_get_modes(struct drm_connector *connector)
-{
-	struct drm_device *dev = connector->dev;
-	struct drm_display_mode *mode;
-
-	/* STUB */
-
-	struct drm_display_mode dummy = {
-		DRM_SIMPLE_MODE(1920*2, 1080*2, 508, 286),
-	};
-
-	dummy.clock = 60 * dummy.hdisplay * dummy.vdisplay;
-	drm_mode_set_name(&dummy);
-
-	mode = drm_mode_duplicate(dev, &dummy);
-	if (!mode) {
-		DRM_ERROR("Failed to create a new display mode\n");
-		return 0;
-	}
-
-	drm_mode_probed_add(connector, mode);
-	return 1;
-}
-
-static int apple_connector_mode_valid(struct drm_connector *connector,
-				      struct drm_display_mode *mode)
-{
-	/* STUB */
-	return MODE_OK;
-}
-
 static enum drm_connector_status
 apple_connector_detect(struct drm_connector *connector, bool force)
 {
@@ -267,7 +236,8 @@ static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
 	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
-	dcp_swap(apple_crtc->dcp, state);
+
+	dcp_flush(apple_crtc->dcp, state);
 }
 
 static const struct drm_crtc_funcs apple_crtc_funcs = {
@@ -305,8 +275,7 @@ static const struct drm_connector_funcs apple_connector_funcs = {
 };
 
 static const struct drm_connector_helper_funcs apple_connector_helper_funcs = {
-	.get_modes		= apple_connector_get_modes,
-	.mode_valid		= apple_connector_mode_valid,
+	.get_modes		= dcp_get_modes,
 };
 
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
@@ -356,6 +325,7 @@ static int apple_probe_per_dcp(struct device *dev,
 
 	connector->base.polled = DRM_CONNECTOR_POLL_HPD;
 	connector->connected = true; /* XXX */
+	connector->dcp = dcp;
 
 	crtc->dcp = dcp;
 	dcp_link(dcp, crtc, connector);

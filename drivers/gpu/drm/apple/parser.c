@@ -294,13 +294,15 @@ static int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 	return 0;
 }
 
-static int parse_mode(struct dcp_parse_ctx *handle)
+static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out)
 {
 	int ret = 0;
 	struct iterator it;
 	struct dimension horiz, vert;
 	s64 id = -1;
 	s64 best_color_mode = -1;
+
+	struct drm_display_mode *mode = &out->mode;
 
 	dcp_parse_foreach_in_dict(handle, it) {
 		char *key = parse_string(it.handle);
@@ -323,24 +325,38 @@ static int parse_mode(struct dcp_parse_ctx *handle)
 			return ret;
 	}
 
-	printk("mode: %lld:%lld: %lldx%lld@%d\n",
-		id, best_color_mode, horiz.active, vert.active,
-	        (s32) (vert.sync_rate >> 16));
+	*mode = (struct drm_display_mode) {
+		DRM_SIMPLE_MODE(horiz.active, vert.active, 508, 286)
+	};
+
+	mode->clock = (vert.sync_rate >> 16) * mode->hdisplay * mode->vdisplay;
+	drm_mode_set_name(mode);
+
+	out->timing_mode_id = id;
+	out->color_mode_id = best_color_mode;
 
 	return 0;
 }
 
-int enumerate_modes(struct dcp_parse_ctx *handle)
+struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
+					 unsigned int *count)
 {
 	struct iterator it;
 	int ret;
+	struct dcp_display_mode *modes = NULL;
 
 	dcp_parse_foreach_in_array(handle, it) {
-		ret = parse_mode(it.handle);
+		if (!modes)
+			modes = kmalloc_array(it.len, sizeof(*modes), GFP_KERNEL);
+		if (!modes)
+			return ERR_PTR(-ENOMEM);
+
+		ret = parse_mode(it.handle, &modes[it.idx]);
 
 		if (ret)
-			return ret;
+			return ERR_PTR(ret);
 	}
 
-	return 0;
+	*count = it.len;
+	return modes;
 }
