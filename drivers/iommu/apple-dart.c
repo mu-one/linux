@@ -721,6 +721,10 @@ static int apple_dart_def_domain_type(struct device *dev)
 	return 0;
 }
 
+#ifndef CONFIG_PCIE_APPLE_MSI_DOORBELL_ADDR
+/* Keep things compiling when CONFIG_PCI_APPLE isn't selected */
+#define CONFIG_PCIE_APPLE_MSI_DOORBELL_ADDR	0
+#endif
 #define DOORBELL_ADDR	(CONFIG_PCIE_APPLE_MSI_DOORBELL_ADDR & PAGE_MASK)
 
 static void apple_dart_get_resv_regions(struct device *dev,
