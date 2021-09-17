@@ -856,6 +856,15 @@ config I2C_PASEMI
 	help
 	  Supports the PA Semi PWRficient on-chip SMBus interfaces.
 
+config I2C_PASEMI_PLATFORM
+	tristate "PA Semi SMBus platform driver"
+	default ARCH_APPLE
+	help
+	  Supports the PA Semi PWRficient based SMBus as a platform
+	  device. This hardware is e.g. found on Apple Silicon SoCs such as
+	  the M1.
+
+
 config I2C_PCA_PLATFORM
 	tristate "PCA9564/PCA9665 as platform device"
 	select I2C_ALGOPCA
