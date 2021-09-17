@@ -852,7 +852,7 @@ config I2C_OWL
 
 config I2C_PASEMI
 	tristate "PA Semi SMBus interface"
-	depends on PPC_PASEMI && PCI
+	depends on PCI
 	help
 	  Supports the PA Semi PWRficient on-chip SMBus interfaces.
 
