@@ -130,7 +130,7 @@ static void __dwc3_set_mode(struct work_struct *work)
 	if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_OTG)
 		dwc3_otg_update(dwc, 0);
 
-	if (!dwc->desired_dr_role)
+	if (!dwc->desired_dr_role && !dwc->role_switch_reinit_quirk)
 		goto out;
 
 	if (dwc->desired_dr_role == dwc->current_dr_role)
@@ -156,6 +156,24 @@ static void __dwc3_set_mode(struct work_struct *work)
 		break;
 	default:
 		break;
+	}
+
+	/*
+	 * This is only required for the snps,role-switch-reinit-quirk:
+	 * Some controllers (e.g. those present on the Apple M1) need a reset
+	 * whenever a device on the root port is unplugged.
+	 * If we get here without a desired_dr_role we have already teared down
+	 * the previous setup and don't need to do anything else. We have
+	 * no valid setting for PRTCAP and may as well leave it the way it is.
+	 * We only need to keep track that we currently don't have any role
+	 * so that the next switch sets everything up again.
+	 */
+	if (!dwc->desired_dr_role) {
+		spin_lock_irqsave(&dwc->lock, flags);
+		dwc->current_dr_role = 0;
+		spin_unlock_irqrestore(&dwc->lock, flags);
+
+		goto out;
 	}
 
 	/* For DRD host or device mode only */
@@ -1399,6 +1417,9 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 
 	dwc->dis_split_quirk = device_property_read_bool(dev,
 				"snps,dis-split-quirk");
+
+	dwc->role_switch_reinit_quirk = device_property_read_bool(dev,
+				"snps,role-switch-reinit-quirk");
 
 	dwc->lpm_nyet_threshold = lpm_nyet_threshold;
 	dwc->tx_de_emphasis = tx_de_emphasis;
