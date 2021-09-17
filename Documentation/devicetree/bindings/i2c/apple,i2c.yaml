@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/i2c/apple,i2c.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Apple/PASemi I2C controller
+
+maintainers:
+  - Sven Peter <sven@svenpeter.dev>
+
+allOf:
+  - $ref: /schemas/i2c/i2c-controller.yaml#
+
+properties:
+  compatible:
+    enum:
+      - apple,t8103-i2c
+      - apple,i2c
+
+  reg:
+    maxItems: 1
+
+  clocks:
+    minItems: 2
+    items:
+      - description: Clock gating the controller itself
+      - description: I2C bus reference clock
+
+  clock-names:
+    minItems: 2
+    items:
+      - const: gate
+      - const: ref
+
+  interrupts:
+    maxItems: 1
+
+  clock-frequency:
+    minimum: 1
+    maximum: 400000
+    description: |
+      Desired operating frequency of the bus in Hz. Defaults to 100 KHz.
+
+required:
+  - compatible
+  - reg
+  - clocks
+  - clock-names
+  - interrupts
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    i2c@a110000 {
+      compatible = "apple,t8103-i2c";
+      reg = <0x35010000 0x4000>;
+      interrupt-parent = <&aic>;
+      interrupts = <0 627 4>;
+      clocks = <&gate_clk>, <&ref_clk>;
+      clock-names = "gate", "ref";
+      #address-cells = <1>;
+      #size-cells = <0>;
+    };
