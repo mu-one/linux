@@ -226,6 +226,12 @@ properties:
       avoid -EPROTO errors with usbhid on some devices (Hikey 970).
     type: boolean
 
+  snps,role-switch-reinit-quirk:
+    description:
+      When set, the core will reinitialize itself whenever a role switch to
+      USB_ROLE_NONE is performed.
+    type: boolean
+
   snps,is-utmi-l1-suspend:
     description:
       True when DWC3 asserts output signal utmi_l1_suspend_n, false when
