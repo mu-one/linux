@@ -15,7 +15,7 @@
 #include <linux/slab.h>
 #include <linux/io.h>
 
-static struct pci_driver pasemi_smb_driver;
+static struct pci_driver pasemi_smb_pci_driver;
 
 struct pasemi_smbus {
 	struct pci_dev		*dev;
@@ -328,7 +328,7 @@ static const struct i2c_algorithm smbus_algorithm = {
 	.functionality	= pasemi_smb_func,
 };
 
-static int pasemi_smb_probe(struct pci_dev *dev,
+static int pasemi_smb_pci_probe(struct pci_dev *dev,
 				      const struct pci_device_id *id)
 {
 	struct pasemi_smbus *smbus;
@@ -346,7 +346,7 @@ static int pasemi_smb_probe(struct pci_dev *dev,
 	smbus->size = pci_resource_len(dev, 0);
 
 	if (!request_region(smbus->base, smbus->size,
-			    pasemi_smb_driver.name)) {
+			    pasemi_smb_pci_driver.name)) {
 		error = -EBUSY;
 		goto out_kfree;
 	}
@@ -379,7 +379,7 @@ static int pasemi_smb_probe(struct pci_dev *dev,
 	return error;
 }
 
-static void pasemi_smb_remove(struct pci_dev *dev)
+static void pasemi_smb_pci_remove(struct pci_dev *dev)
 {
 	struct pasemi_smbus *smbus = pci_get_drvdata(dev);
 
@@ -388,21 +388,21 @@ static void pasemi_smb_remove(struct pci_dev *dev)
 	kfree(smbus);
 }
 
-static const struct pci_device_id pasemi_smb_ids[] = {
+static const struct pci_device_id pasemi_smb_pci_ids[] = {
 	{ PCI_DEVICE(0x1959, 0xa003) },
 	{ 0, }
 };
 
-MODULE_DEVICE_TABLE(pci, pasemi_smb_ids);
+MODULE_DEVICE_TABLE(pci, pasemi_smb_pci_ids);
 
-static struct pci_driver pasemi_smb_driver = {
+static struct pci_driver pasemi_smb_pci_driver = {
 	.name		= "i2c-pasemi",
-	.id_table	= pasemi_smb_ids,
-	.probe		= pasemi_smb_probe,
-	.remove		= pasemi_smb_remove,
+	.id_table	= pasemi_smb_pci_ids,
+	.probe		= pasemi_smb_pci_probe,
+	.remove		= pasemi_smb_pci_remove,
 };
 
-module_pci_driver(pasemi_smb_driver);
+module_pci_driver(pasemi_smb_pci_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR ("Olof Johansson <olof@lixom.net>");
