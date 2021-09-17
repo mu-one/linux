@@ -9,6 +9,7 @@
 
 #include <dt-bindings/interrupt-controller/apple-aic.h>
 #include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/pinctrl/apple.h>
 
 #define APPLE_CLK_GPIO     0x130
 #define APPLE_CLK_SIOBUSIF 0x1c0
@@ -360,6 +361,172 @@
 						<0 0 0 2 &port02 0 0 0 1>,
 						<0 0 0 3 &port02 0 0 0 2>,
 						<0 0 0 4 &port02 0 0 0 3>;
+			};
+		};
+
+		dwc3_0_dart_0: iommu@382f00000 {
+			compatible = "apple,t8103-dart";
+			reg = <0x3 0x82f00000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 781 IRQ_TYPE_LEVEL_HIGH>;
+			#iommu-cells = <1>;
+		};
+
+		dwc3_0_dart_1: iommu@382f80000 {
+			compatible = "apple,t8103-dart";
+			reg = <0x3 0x82f80000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 781 IRQ_TYPE_LEVEL_HIGH>;
+			#iommu-cells = <1>;
+		};
+
+		dwc3_0: usb@382280000{
+			compatible = "snps,dwc3";
+			snps,role-switch-reinit-quirk;
+			reg = <0x3 0x82280000 0x0 0x100000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 777 IRQ_TYPE_LEVEL_HIGH>;
+			dr_mode = "otg";
+			usb-role-switch;
+			role-switch-default-mode = "host";
+			iommus = <&dwc3_0_dart_0 0>, <&dwc3_0_dart_1 1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				typec0_usb_hs: endpoint {
+					remote-endpoint = <&typec0_con_hs>;
+				};
+			};
+		};
+
+		dwc3_1_dart_0: iommu@502f00000 {
+			compatible = "apple,t8103-dart";
+			reg = <0x5 0x02f00000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 861 IRQ_TYPE_LEVEL_HIGH>;
+			#iommu-cells = <1>;
+		};
+
+		dwc3_1_dart_1: iommu@502f80000 {
+			compatible = "apple,t8103-dart";
+			reg = <0x5 0x02f80000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 861 IRQ_TYPE_LEVEL_HIGH>;
+			#iommu-cells = <1>;
+		};
+
+		dwc3_1: usb@502280000{
+			compatible = "snps,dwc3";
+			snps,role-switch-reinit-quirk;
+			reg = <0x5 0x02280000 0x0 0x100000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 857 IRQ_TYPE_LEVEL_HIGH>;
+			dr_mode = "otg";
+			usb-role-switch;
+			role-switch-default-mode = "host";
+			iommus = <&dwc3_1_dart_0 0>, <&dwc3_1_dart_1 1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+			reg = <0>;
+				typec1_usb_hs: endpoint {
+					remote-endpoint = <&typec1_con_hs>;
+				};
+			};
+		};
+
+		i2c0: i2c0@20a110000 {
+			compatible = "apple,t8103-i2c";
+			reg = <0x2 0x35010000 0x0 0x4000>;
+			clocks = <&clk24>, <&clk24>;
+			clock-names = "gate", "ref";
+			interrupt-parent = <&aic>;
+			interrupts = <0 627 4>;
+			pinctrl-0 = <&i2c0_pins>;
+			pinctrl-names = "default";
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+
+			hpm0: hpm0@38 {
+				compatible = "apple,cd321x";
+				reg = <0x38>;
+				interrupt-parent = <&gpio>;
+				interrupts = <106 IRQ_TYPE_LEVEL_LOW>;
+				interrupt-names = "irq";
+				typec0: connector {
+					compatible = "usb-c-connector";
+					label = "USB-C A";
+					power-role = "dual";
+					data-role = "dual";
+
+					ports {
+						#address-cells = <1>;
+						#size-cells = <0>;
+						port@0 {
+							reg = <0>;
+							typec0_con_hs: endpoint {
+								remote-endpoint = <&typec0_usb_hs>;
+							};
+						};
+					};
+				};
+			};
+
+			hpm1: hpm1@3f {
+				compatible = "apple,cd321x";
+				reg = <0x3f>;
+				interrupt-parent = <&gpio>;
+				interrupts = <106 IRQ_TYPE_LEVEL_LOW>;
+				interrupt-names = "irq";
+
+				typec1: connector {
+					compatible = "usb-c-connector";
+					label = "USB-C B";
+					power-role = "dual";
+					data-role = "dual";
+
+					ports {
+						#address-cells = <1>;
+						#size-cells = <0>;
+						port@0 {
+							reg = <0>;
+							typec1_con_hs: endpoint {
+								remote-endpoint = <&typec1_usb_hs>;
+							};
+						};
+					};
+				};
+			};
+		};
+
+		gpio: pinctrl@23c100000 {
+			compatible = "apple,t8103-pinctrl", "apple,pinctrl";
+			reg = <0x2 0x3c100000 0x0 0x100000>;
+
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 190 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 191 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 192 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 193 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 194 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 195 IRQ_TYPE_LEVEL_HIGH
+			              AIC_IRQ 196 IRQ_TYPE_LEVEL_HIGH>;
+
+			clocks = <&clk24>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-ranges = <&gpio 0 0 212>;
+
+			interrupt-controller;
+			#interrupt-cells = <2>;
+
+			i2c0_pins: i2c0-pins {
+				pinmux = <APPLE_PINMUX(192, 1)>,
+					<APPLE_PINMUX(188, 1)>;
 			};
 		};
 	};
