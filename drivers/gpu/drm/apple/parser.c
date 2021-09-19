@@ -6,6 +6,7 @@
 #include <linux/math.h>
 #include <linux/string.h>
 #include <linux/slab.h>
+#include "parser.h"
 
 #define OSSERIALIZE_HDR 0xd3
 
@@ -25,12 +26,7 @@ struct os_tag {
 	bool last : 1;
 } __packed;
 
-struct ctx {
-	void *blob;
-	u32 pos, len;
-};
-
-void *parse_bytes(struct ctx *ctx, size_t count)
+void *parse_bytes(struct dcp_parse_ctx *ctx, size_t count)
 {
 	void *ptr = ctx->blob + ctx->pos;
 
@@ -41,12 +37,12 @@ void *parse_bytes(struct ctx *ctx, size_t count)
 	return ptr;
 }
 
-u32 *parse_u32(struct ctx *ctx)
+u32 *parse_u32(struct dcp_parse_ctx *ctx)
 {
 	return parse_bytes(ctx, sizeof(u32));
 }
 
-struct os_tag *parse_tag(struct ctx *ctx)
+struct os_tag *parse_tag(struct dcp_parse_ctx *ctx)
 {
 	struct os_tag *tag;
 
@@ -64,7 +60,7 @@ struct os_tag *parse_tag(struct ctx *ctx)
 	return tag;
 }
 
-struct os_tag *parse_tag_type(struct ctx *ctx, enum os_otype type)
+struct os_tag *parse_tag_type(struct dcp_parse_ctx *ctx, enum os_otype type)
 {
 	struct os_tag *tag = parse_tag(ctx);
 
@@ -77,7 +73,7 @@ struct os_tag *parse_tag_type(struct ctx *ctx, enum os_otype type)
 	return tag;
 }
 
-int skip(struct ctx *handle)
+int skip(struct dcp_parse_ctx *handle)
 {
 	struct os_tag *tag = parse_tag(handle);
 	int ret = 0;
@@ -118,14 +114,14 @@ int skip(struct ctx *handle)
 	}
 }
 
-enum os_otype peek_type(struct ctx handle)
+enum os_otype peek_type(struct dcp_parse_ctx handle)
 {
 	struct os_tag *tag = parse_tag(&handle);
 	return tag->type;
 }
 
 /* Caller must free */
-char *parse_string(struct ctx *handle)
+char *parse_string(struct dcp_parse_ctx *handle)
 {
 	struct os_tag *tag = parse_tag_type(handle, OS_OTYPE_STRING);
 	const char *in;
@@ -145,7 +141,7 @@ char *parse_string(struct ctx *handle)
 	return out;
 }
 
-int parse_int64(struct ctx *handle, s64 *value)
+int parse_int64(struct dcp_parse_ctx *handle, s64 *value)
 {
 	void *tag = parse_tag_type(handle, OS_OTYPE_INT64);
 	s64 *in;
@@ -162,7 +158,7 @@ int parse_int64(struct ctx *handle, s64 *value)
 	return 0;
 }
 
-int parse_bool(struct ctx *handle, bool *b)
+int parse_bool(struct dcp_parse_ctx *handle, bool *b)
 {
 	struct os_tag *tag = parse_tag_type(handle, OS_OTYPE_BOOL);
 	if (IS_ERR(tag))
@@ -173,12 +169,12 @@ int parse_bool(struct ctx *handle, bool *b)
 }
 
 struct iterator {
-	struct ctx *handle;
+	struct dcp_parse_ctx *handle;
 	u32 idx;
 	u32 len;
 };
 
-int iterator_begin(struct ctx *handle, struct iterator *it, bool dictionary)
+int iterator_begin(struct dcp_parse_ctx *handle, struct iterator *it, bool dictionary)
 {
 	struct os_tag *tag;
 	enum os_otype type = dictionary ? OS_OTYPE_DICTIONARY : OS_OTYPE_ARRAY;
@@ -201,11 +197,11 @@ int iterator_begin(struct ctx *handle, struct iterator *it, bool dictionary)
 #define foreach_in_dict(handle, it) \
 	for (iterator_begin(handle, &it, true); it.idx < it.len; ++it.idx)
 
-int parse(void *blob, size_t size, struct ctx *ctx)
+int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx)
 {
 	u32 *header;
 
-	*ctx = (struct ctx) {
+	*ctx = (struct dcp_parse_ctx) {
 		.blob = blob,
 		.len = size,
 		.pos = 0,
@@ -229,10 +225,10 @@ static void print_spaces(int indent)
 		printk(" ");
 }
 
-static int print_dict(struct ctx *handle, int indent);
-static int print_array(struct ctx *handle, int indent);
+static int print_dict(struct dcp_parse_ctx *handle, int indent);
+static int print_array(struct dcp_parse_ctx *handle, int indent);
 
-int print_value(struct ctx *handle, int indent)
+int print_value(struct dcp_parse_ctx *handle, int indent)
 {
 	int ret;
 
@@ -290,7 +286,7 @@ int print_value(struct ctx *handle, int indent)
 	}
 }
 
-static int print_dict(struct ctx *handle, int indent)
+static int print_dict(struct dcp_parse_ctx *handle, int indent)
 {
 	int ret;
 	struct iterator it;
@@ -317,7 +313,7 @@ static int print_dict(struct ctx *handle, int indent)
 	return 0;
 }
 
-static int print_array(struct ctx *handle, int indent)
+static int print_array(struct dcp_parse_ctx *handle, int indent)
 {
 	int ret;
 	struct iterator it;
@@ -343,7 +339,7 @@ struct dimension {
 	s64 sync_rate, precise_sync_rate;
 };
 
-int parse_dimension(struct ctx *handle, struct dimension *dim)
+int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
 {
 	struct iterator it;
 	int ret = 0;
@@ -378,7 +374,7 @@ int parse_dimension(struct ctx *handle, struct dimension *dim)
 	return 0;
 }
 
-int parse_color_modes(struct ctx *handle, s64 *best_id)
+int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 {
 	struct iterator outer_it;
 	int ret = 0;
@@ -420,7 +416,7 @@ int parse_color_modes(struct ctx *handle, s64 *best_id)
 	return 0;
 }
 
-int parse_mode(struct ctx *handle)
+int parse_mode(struct dcp_parse_ctx *handle)
 {
 	int ret = 0;
 	struct iterator it;
@@ -460,7 +456,7 @@ int parse_mode(struct ctx *handle)
 	return 0;
 }
 
-int enumerate_modes(struct ctx *handle)
+int enumerate_modes(struct dcp_parse_ctx *handle)
 {
 	struct iterator it;
 	int ret;

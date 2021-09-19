@@ -15,6 +15,7 @@
 
 #include "dcpep.h"
 #include "dcp.h"
+#include "parser.h"
 
 struct apple_dcp;
 
@@ -537,27 +538,39 @@ static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_set_dcpav_prop_end_req *req = in;
 	u8 *resp = out;
+	struct dcp_parse_ctx ctx;
+	int ret;
 
 	if (!dcp->chunks.data) {
 		dev_warn(dcp->dev, "ignoring spurious end\n");
 		*resp = false;
-		return true;
+		goto reset;
 	}
 
-	/* TODO: parse */
-	dev_warn(dcp->dev, "transferred %s:\n", req->key);
-#if 0
-	print_hex_dump(KERN_INFO, "dcp: ",
-		       DUMP_PREFIX_OFFSET, 16, 1,
-		       dcp->chunks.data, min(dcp->chunks.length, 4096), true);
-#endif
+	ret = parse(dcp->chunks.data, dcp->chunks.length, &ctx);
 
+	if (ret) {
+		dev_warn(dcp->dev, "bad header on dcpav props\n");
+		*resp = false;
+		goto reset;
+	}
+
+	if (!strcmp(req->key, "TimingElements")) {
+		if (enumerate_modes(&ctx)) {
+			dev_warn(dcp->dev, "failed to parse modes\n");
+			*resp = false;
+			goto reset;
+		}
+	}
+
+	*resp = true;
+
+reset:
 	/* Reset for the next transfer */
 	devm_kfree(dcp->dev, dcp->chunks.data);
 	dcp->chunks.data = NULL;
 	dcp->chunks.length = 0;
 
-	*resp = true;
 	return true;
 }
 

@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright 2021 Alyssa Rosenzweig <alyssa@rosenzweig.io> */
+
+#ifndef __APPLE_DCP_PARSER_H__
+#define __APPLE_DCP_PARSER_H__
+
+struct dcp_parse_ctx {
+	void *blob;
+	u32 pos, len;
+};
+
+int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx);
+int enumerate_modes(struct dcp_parse_ctx *handle);
+
+#endif
