@@ -114,12 +114,6 @@ int skip(struct dcp_parse_ctx *handle)
 	}
 }
 
-enum os_otype peek_type(struct dcp_parse_ctx handle)
-{
-	struct os_tag *tag = parse_tag(&handle);
-	return tag->type;
-}
-
 /* Caller must free */
 char *parse_string(struct dcp_parse_ctx *handle)
 {
@@ -214,123 +208,6 @@ int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx)
 	if (*header != OSSERIALIZE_HDR)
 		return -EINVAL;
 
-	return 0;
-}
-
-static void print_spaces(int indent)
-{
-	int spaces = indent * 4;
-
-	while(spaces--)
-		printk(" ");
-}
-
-static int print_dict(struct dcp_parse_ctx *handle, int indent);
-static int print_array(struct dcp_parse_ctx *handle, int indent);
-
-int print_value(struct dcp_parse_ctx *handle, int indent)
-{
-	int ret;
-
-	switch (peek_type(*handle)) {
-	case OS_OTYPE_DICTIONARY:
-		return print_dict(handle, indent);
-
-	case OS_OTYPE_ARRAY:
-		return print_array(handle, indent);
-
-	case OS_OTYPE_STRING:
-	{
-		char *val = parse_string(handle);
-		if (IS_ERR(val))
-			return PTR_ERR(val);
-
-		printk("\"%s\"", val);
-		kfree(val);
-		return 0;
-	}
-
-	case OS_OTYPE_BOOL:
-	{
-		bool b;
-
-		ret = parse_bool(handle, &b);
-		if (ret)
-			return ret;
-
-		printk("%s", b ? "true" : "false");
-		return 0;
-	}
-
-	case OS_OTYPE_INT64:
-	{
-		s64 v;
-
-		ret = parse_int64(handle, &v);
-		if (ret)
-			return ret;
-
-		printk("%lld", v);
-		return 0;
-	}
-
-	case OS_OTYPE_BLOB:
-	{
-		skip(handle);
-		printk("<blob>");
-		return 0;
-	}
-
-	default:
-		return -EINVAL;
-	}
-}
-
-static int print_dict(struct dcp_parse_ctx *handle, int indent)
-{
-	int ret;
-	struct iterator it;
-
-	printk("{\n");
-	foreach_in_dict(handle, it) {
-		char *key = parse_string(it.handle);
-		if (IS_ERR(key))
-			return PTR_ERR(key);
-
-		print_spaces(indent + 1);
-		printk("\"%s\": ", key);
-		kfree(key);
-
-		ret = print_value(it.handle, indent + 1);
-		if (ret)
-			return ret;
-
-		printk(",\n");
-	}
-
-	print_spaces(indent);
-	printk("}");
-	return 0;
-}
-
-static int print_array(struct dcp_parse_ctx *handle, int indent)
-{
-	int ret;
-	struct iterator it;
-
-	printk("[\n");
-	foreach_in_array(handle, it) {
-		print_spaces(indent + 1);
-
-		ret = print_value(it.handle, indent + 1);
-		if (ret)
-			return ret;
-
-		printk(",\n");
-	}
-
-	print_spaces(indent);
-	printk("]");
 	return 0;
 }
 
