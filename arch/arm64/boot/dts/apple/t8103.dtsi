@@ -240,6 +240,40 @@
 			};
 		};
 
+		nub_spmi0: spmi@23d0d8000 {
+			compatible = "apple,spmi-m1";
+			reg = <0x2 0x3d0d8000 0x0 0x2000>;
+			interrupts = <0 343 4>;
+
+			#address-cells = <2>;
+			#size-cells = <0>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			interrupt-parent = <&aic>;
+
+			pmu@f {
+				compatible = "apple,spmi-pmu-sera", "apple,spmi-pmu";
+				reg = <0xf 0>;
+				interrupt-parent = <&nub_spmi0>;
+				interrupts = <2 0>;
+
+				pmu_rtc: rtc@d002 {
+					compatible = "apple,spmi-rtc-v0";
+					base = <0xd002 6   0xd100 6>;
+				};
+
+				sysctrl: sysctrl@9f00 {
+					compatible = "apple,spmi-bbram-v0";
+					base = <0x9f00 0x20>;
+				};
+
+				bbram: bbram@a000 {
+					compatible = "apple,spmi-bbram-v0";
+					base = <0xa000 0x1000>;
+				};
+			};
+		};
+
 		reboot: reboot@23d2b0000 {
 			compatible = "apple,reboot-v0";
 			reg = <0x2 0x3d2b0000 0x0 0x4000>;
