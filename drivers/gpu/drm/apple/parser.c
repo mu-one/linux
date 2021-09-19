@@ -300,7 +300,6 @@ int parse_mode(struct dcp_parse_ctx *handle)
 	struct dimension horiz, vert;
 	s64 id = -1;
 	s64 best_color_mode = -1;
-	bool is_preferred = false;
 
 	foreach_in_dict(handle, it) {
 		char *key = parse_string(it.handle);
@@ -314,8 +313,6 @@ int parse_mode(struct dcp_parse_ctx *handle)
 			ret = parse_dimension(it.handle, &vert);
 		else if (!strcmp(key, "ColorModes"))
 			ret = parse_color_modes(it.handle, &best_color_mode);
-		else if (!strcmp(key, "IsPreferred"))
-			ret = parse_bool(it.handle, &is_preferred);
 		else if (!strcmp(key, "ID"))
 			ret = parse_int64(it.handle, &id);
 		else
@@ -325,9 +322,8 @@ int parse_mode(struct dcp_parse_ctx *handle)
 			return ret;
 	}
 
-	printk("%s%lld:%lld: %lldx%lld@%d\n",
-		is_preferred ? "* " : "  ", id, best_color_mode,
-		horiz.active, vert.active,
+	printk("mode: %lld:%lld: %lldx%lld@%d\n",
+		id, best_color_mode, horiz.active, vert.active,
 	        (s32) (vert.sync_rate >> 16));
 
 	return 0;
