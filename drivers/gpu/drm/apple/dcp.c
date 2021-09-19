@@ -15,6 +15,7 @@
 
 #include "dcpep.h"
 #include "dcp.h"
+#include "parser.h"
 
 struct apple_dcp;
 
@@ -70,7 +71,16 @@ struct apple_dcp {
 	/* Active chunked transfer. There can only be one at a time. */
 	struct dcp_chunks chunks;
 
+	/* Queued swap. Owned by the DCP to avoid per-swap memory allocation */
+	struct dcp_swap_submit_req swap;
+
+	/* Current display mode */
+	struct dcp_set_digital_out_mode_req mode;
+
 	bool active;
+
+	struct dcp_display_mode *modes;
+	unsigned int nr_modes;
 };
 
 /*
@@ -258,28 +268,6 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, dcpep_ack(context));
 }
 
-static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	dcp_callback_t cb = cookie;
-
-	struct dcp_set_digital_out_mode_req req = {
-		/* TODO: get from TimingElements property */
-		.dp_color_mode_id = 90,
-		.dp_timing_mode_id = 72
-	};
-
-	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
-		 sizeof(u32), &req, cb, NULL);
-}
-
-static void dcp_modeset(struct apple_dcp *dcp, dcp_callback_t cb)
-{
-	u32 handle = 2;
-
-	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
-		 sizeof(u32), &handle, dcp_set_4k, cb);
-}
-
 /* DCP callback handlers */
 static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
@@ -303,17 +291,11 @@ static bool dcpep_cb_zero(struct apple_dcp *dcp, void *out, void *in)
 static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_get_uint_prop_resp *resp = out;
-	struct dcp_get_uint_prop_req *req = in;
 
-	char obj[4 + 1] = { 0 };
-	char key[0x40 + 1] = { 0 };
-
-	memcpy(obj, req->obj, sizeof(req->obj));
-	memcpy(key, req->key, sizeof(req->key));
-
-	dev_info(dcp->dev, "ignoring property request %s:%s\n", obj, key);
+	/* unimplemented for now */
 
 	resp->value = 0;
+	resp->ret = 0;
 	return true;
 }
 
@@ -537,27 +519,46 @@ static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_set_dcpav_prop_end_req *req = in;
 	u8 *resp = out;
+	struct dcp_parse_ctx ctx;
+	int ret;
 
 	if (!dcp->chunks.data) {
 		dev_warn(dcp->dev, "ignoring spurious end\n");
 		*resp = false;
-		return true;
+		goto reset;
 	}
 
-	/* TODO: parse */
-	dev_warn(dcp->dev, "transferred %s:\n", req->key);
-#if 0
-	print_hex_dump(KERN_INFO, "dcp: ",
-		       DUMP_PREFIX_OFFSET, 16, 1,
-		       dcp->chunks.data, min(dcp->chunks.length, 4096), true);
-#endif
+	ret = parse(dcp->chunks.data, dcp->chunks.length, &ctx);
 
+	if (ret) {
+		dev_warn(dcp->dev, "bad header on dcpav props\n");
+		*resp = false;
+		goto reset;
+	}
+
+	if (!strcmp(req->key, "TimingElements")) {
+		struct dcp_display_mode *modes;
+
+		modes = enumerate_modes(&ctx, &dcp->nr_modes);
+
+		if (IS_ERR(modes)) {
+			dev_warn(dcp->dev, "failed to parse modes\n");
+			dcp->nr_modes = 0;
+			*resp = false;
+			goto reset;
+		}
+
+		dcp->modes = modes;
+	}
+
+	*resp = true;
+
+reset:
 	/* Reset for the next transfer */
 	devm_kfree(dcp->dev, dcp->chunks.data);
 	dcp->chunks.data = NULL;
 	dcp->chunks.length = 0;
 
-	*resp = true;
 	return true;
 }
 
@@ -631,12 +632,23 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
-static void got_hotplug(struct apple_dcp *dcp, void *data, void *cookie)
+/*
+ * Helper to send a DRM hotplug event. DCP is accessed from a single (RTKit)
+ * thread. However, drm_kms_helper_hotplug_event does an atomic commit and
+ * waits for vblank. Since these require talking to the DCP, we can't call it
+ * from the RTKit thread.
+ *
+ * We need to call drm_kms_helper_hotplug_event in response to a DCP
+ * hotplug_notify_gated callback.  To do so safely and without deadlock, we
+ * move the call to a separate thread via a workqueue.
+ */
+void dcp_hotplug(struct work_struct *work)
 {
-	struct apple_connector *connector = dcp->connector;
-	struct drm_device *dev = connector->base.dev;
+	struct apple_connector *connector;
+	struct drm_device *dev;
 
-	connector->connected = !!(data);
+	connector = container_of(work, struct apple_connector, hotplug_wq);
+	dev = connector->base.dev;
 
 	if (dev && dev->registered)
 		drm_kms_helper_hotplug_event(dev);
@@ -644,13 +656,12 @@ static void got_hotplug(struct apple_dcp *dcp, void *data, void *cookie)
 
 static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 {
+	struct apple_connector *connector = dcp->connector;
 	u64 *connected = in;
 
-	/* Mode sets are required to reenable the connector */
-	if (*connected)
-		dcp_modeset(dcp, got_hotplug);
-	else
-		got_hotplug(dcp, NULL, NULL);
+	connector->connected = !!(*connected);
+
+	schedule_work(&connector->hotplug_wq);
 
 	return true;
 }
@@ -821,22 +832,18 @@ static void dcp_swapped(struct apple_dcp *dcp, void *data, void *cookie)
 static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	struct dcp_swap_start_resp *resp = data;
-	struct dcp_swap_submit_req *req = cookie;
 
-	req->swap.swap_id = resp->swap_id;
+	dcp->swap.swap.swap_id = resp->swap_id;
 
-	dcp_push(dcp, false, dcp_swap_submit,
-		 sizeof(struct dcp_swap_submit_req),
+	dcp_push(dcp, false, dcp_swap_submit, sizeof(dcp->swap),
 		 sizeof(struct dcp_swap_submit_resp),
-		 req, dcp_swapped, NULL);
-
-	kfree(req);
+		 &dcp->swap, dcp_swapped, NULL);
 }
 
 /*
- * DRM specifies rectangles as a product of semi-open intervals [x1, x2) x [y1,
- * y2). DCP specifies rectangles as a start coordinate and a width/height
- * <x1, y1> + <w, h>. Convert between these forms.
+ * DRM specifies rectangles as start and end coordinates.  DCP specifies
+ * rectangles as a start coordinate and a width/height. Convert a DRM rectangle
+ * to a DCP rectangle.
  */
 struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 {
@@ -848,21 +855,100 @@ struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 	};
 }
 
-void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
+int dcp_get_modes(struct drm_connector *connector)
+{
+	struct apple_connector *apple_connector = to_apple_connector(connector);
+	struct platform_device *pdev = apple_connector->dcp;
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+
+	struct drm_device *dev = connector->dev;
+	struct drm_display_mode *mode;
+	int i;
+
+	for (i = 0; i < dcp->nr_modes; ++i) {
+		mode = drm_mode_duplicate(dev, &dcp->modes[i].mode);
+
+		if (!mode) {
+			dev_err(dev->dev, "Failed to create a new display mode\n");
+			return 0;
+		}
+
+		drm_mode_probed_add(connector, mode);
+	}
+
+	return dcp->nr_modes;
+}
+
+/* The user may own drm_display_mode, so we need to search for our copy */
+static struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp,
+					    struct drm_display_mode *mode)
+{
+	int i;
+
+	for (i = 0; i < dcp->nr_modes; ++i) {
+		if (drm_mode_match(mode, &dcp->modes[i].mode,
+				   DRM_MODE_MATCH_TIMINGS |
+				   DRM_MODE_MATCH_CLOCK))
+			return &dcp->modes[i];
+	}
+
+	return NULL;
+}
+
+int dcp_mode_valid(struct drm_connector *connector,
+                   struct drm_display_mode *mode)
+{
+	struct apple_connector *apple_connector = to_apple_connector(connector);
+	struct platform_device *pdev = apple_connector->dcp;
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+
+	return lookup_mode(dcp, mode) ? MODE_OK : MODE_BAD;
+}
+
+/* Helpers to modeset and swap, used to flush */
+static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
+{
+	struct dcp_swap_start_req start_req = { 0 };
+
+	dcp_push(dcp, false, dcp_swap_start,
+		 sizeof(struct dcp_swap_start_req),
+		 sizeof(struct dcp_swap_start_resp),
+		 &start_req, dcp_swap_started, NULL);
+}
+
+static void dcp_modeset_2(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(dcp->mode),
+		 sizeof(u32), &dcp->mode, do_swap, NULL);
+}
+
+static void dcp_modeset_and_swap(struct apple_dcp *dcp)
+{
+	u32 handle = 2;
+
+	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
+		 sizeof(u32), &handle, dcp_modeset_2, NULL);
+}
+
+void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct drm_plane *plane;
 	struct drm_plane_state *new_state, *old_state;
-	struct dcp_swap_submit_req *req;
+	struct drm_crtc_state *crtc_state;
+	struct dcp_swap_submit_req *req = &dcp->swap;
 
 	int l;
+
+	crtc_state = drm_atomic_get_new_crtc_state(state, (struct drm_crtc *) dcp->crtc);
 
 	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel")) {
 		apple_crtc_vblank(dcp->crtc);
 		return;
 	}
 
-	req = kzalloc(sizeof(*req), GFP_KERNEL);
+	/* Reset to defaults */
+	memset(req, 0, sizeof(*req));
 
 	for_each_oldnew_plane_in_state(state, plane, old_state, new_state, l) {
 		struct drm_framebuffer *fb = new_state->fb;
@@ -891,8 +977,7 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap.surf_ids[l] = 3 + l; // XXX
 
 		req->surf[l] = (struct dcp_surface) {
-			//.format = dcp_formats[fb->format->format].dcp,
-			.format = dcp_formats[0].dcp,
+			.format = drm_format_to_dcp(fb->format->format),
 			.stride = fb->pitches[0],
 			.width = fb->width,
 			.height = fb->height,
@@ -916,10 +1001,25 @@ void dcp_swap(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	WARN_ON(!dcp->active);
 
-	dcp_push(dcp, false, dcp_swap_start,
-		 sizeof(struct dcp_swap_start_req),
-		 sizeof(struct dcp_swap_start_resp),
-		 &req, dcp_swap_started, req);
+	if (drm_atomic_crtc_needs_modeset(crtc_state)) {
+		struct dcp_display_mode *mode;
+
+		mode = lookup_mode(dcp, &crtc_state->mode);
+
+		if (WARN(!mode, "cannot find mode")) {
+			do_swap(dcp, NULL, NULL);
+			return;
+		}
+
+		dcp->mode = (struct dcp_set_digital_out_mode_req) {
+			.dp_color_mode_id = mode->color_mode_id,
+			.dp_timing_mode_id = mode->timing_mode_id
+		};
+
+		dcp_modeset_and_swap(dcp);
+	} else
+		do_swap(dcp, NULL, NULL);
+
 }
 EXPORT_SYMBOL_GPL(dcp_swap);
 
@@ -931,17 +1031,12 @@ bool dcp_is_initialized(struct platform_device *pdev)
 }
 EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
-static void dcp_active(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	dcp->active = true;
-}
-
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	u32 *resp = data;
 
 	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
-	dcp_modeset(dcp, dcp_active);
+	dcp->active = true;
 }
 
 static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
