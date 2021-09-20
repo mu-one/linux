@@ -74,6 +74,9 @@ struct apple_dcp {
 	void *req;
 
 	bool active;
+
+	struct dcp_display_mode *modes;
+	unsigned int nr_modes;
 };
 
 /*
@@ -538,7 +541,6 @@ static bool dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 {
-	struct apple_connector *connector = dcp->connector;
 	struct dcp_set_dcpav_prop_end_req *req = in;
 	u8 *resp = out;
 	struct dcp_parse_ctx ctx;
@@ -561,16 +563,16 @@ static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 	if (!strcmp(req->key, "TimingElements")) {
 		struct dcp_display_mode *modes;
 
-		modes = enumerate_modes(&ctx, &connector->nr_modes);
+		modes = enumerate_modes(&ctx, &dcp->nr_modes);
 
 		if (IS_ERR(modes)) {
 			dev_warn(dcp->dev, "failed to parse modes\n");
-			connector->nr_modes = 0;
+			dcp->nr_modes = 0;
 			*resp = false;
 			goto reset;
 		}
 
-		connector->modes = modes;
+		dcp->modes = modes;
 	}
 
 	*resp = true;
@@ -870,6 +872,31 @@ static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
 		 sizeof(struct dcp_swap_start_req),
 		 sizeof(struct dcp_swap_start_resp),
 		 &start_req, dcp_swap_started, dcp->req);
+}
+
+int dcp_get_modes(struct drm_connector *connector)
+{
+	struct apple_connector *apple_connector = to_apple_connector(connector);
+	struct platform_device *pdev = apple_connector->dcp;
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+
+	struct drm_device *dev = connector->dev;
+	struct drm_display_mode *mode;
+	int i;
+
+	for (i = 0; i < dcp->nr_modes; ++i) {
+		struct drm_display_mode _ = dcp->modes[i].mode;
+
+		mode = drm_mode_duplicate(dev, &_);
+		if (!mode) {
+			dev_err(dev->dev, "Failed to create a new display mode\n");
+			return 0;
+		}
+
+		drm_mode_probed_add(connector, mode);
+	}
+
+	return dcp->nr_modes;
 }
 
 void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)

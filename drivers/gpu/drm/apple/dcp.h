@@ -1,4 +1,5 @@
 #include <drm/drm_atomic.h>
+#include "parser.h"
 
 struct apple_crtc;
 
@@ -6,8 +7,7 @@ struct apple_connector {
 	struct drm_connector base;
 	bool connected;
 
-	struct dcp_display_mode *modes;
-	unsigned int nr_modes;
+	struct platform_device *dcp;
 };
 
 #define to_apple_connector(x) container_of(x, struct apple_connector, base)
@@ -39,3 +39,4 @@ void dcp_link(struct platform_device *pdev, struct apple_crtc *apple, struct app
 void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state);
 bool dcp_is_initialized(struct platform_device *pdev);
 void apple_crtc_vblank(struct apple_crtc *apple);
+int dcp_get_modes(struct drm_connector *connector);
