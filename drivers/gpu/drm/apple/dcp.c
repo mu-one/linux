@@ -268,14 +268,9 @@ static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	dcp_callback_t cb = cookie;
 
-	struct dcp_set_digital_out_mode_req req = {
-		/* TODO: get from TimingElements property */
-		.dp_color_mode_id = 90,
-		.dp_timing_mode_id = 72
-	};
-
-	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(req),
-		 sizeof(u32), &req, cb, NULL);
+	dcp_push(dcp, false, dcp_set_digital_out_mode,
+		 sizeof(struct dcp_set_digital_out_mode_req),
+		 sizeof(u32), dcp->req, cb, NULL);
 }
 
 static void dcp_modeset(struct apple_dcp *dcp, dcp_callback_t cb)
@@ -899,6 +894,18 @@ int dcp_get_modes(struct drm_connector *connector)
 	return dcp->nr_modes;
 }
 
+struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp, struct drm_display_mode *mode)
+{
+	int i;
+
+	for (i = 0; i < dcp->nr_modes; ++i) {
+		if (drm_mode_equal(mode, &dcp->modes[i].mode))
+			return &dcp->modes[i];
+	}
+
+	return NULL;
+}
+
 void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
@@ -911,7 +918,7 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	crtc_state = drm_atomic_get_crtc_state(state, (struct drm_crtc *) dcp->crtc);
 
-	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel")) {
+	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel") || crtc_state->mode.hdisplay == 0) {
 		apple_crtc_vblank(dcp->crtc);
 		return;
 	}
@@ -973,9 +980,24 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 
 	dcp->req = req;
 
-	if (drm_atomic_crtc_needs_modeset(crtc_state))
+	if (drm_atomic_crtc_needs_modeset(crtc_state)) {
+//		struct dcp_display_mode *mode;
+		struct dcp_set_digital_out_mode_req *mode_req;
+
+//		mode = lookup_mode(dcp, &crtc_state->mode);
+		mode_req = kmalloc(sizeof(*mode_req), GFP_KERNEL);
+
+		*mode_req = (struct dcp_set_digital_out_mode_req) {
+			//.dp_color_mode_id = mode->color_mode_id,
+			//.dp_timing_mode_id = mode->timing_mode_id
+                       .dp_color_mode_id = 90,
+                       .dp_timing_mode_id = 72
+
+		};
+
+		dcp->req = mode_req;
 		dcp_modeset(dcp, do_swap);
-	else
+	} else
 		do_swap(dcp, NULL, NULL);
 
 }

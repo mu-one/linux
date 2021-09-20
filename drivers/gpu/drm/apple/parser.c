@@ -329,17 +329,16 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 		DRM_SIMPLE_MODE(horiz.active, vert.active, 508, 286)
 	};
 
-	mode->clock = (s32) (vert.sync_rate >> 16) * mode->htotal * mode->vtotal;
+	s32 refresh_rate = (vert.sync_rate >> 16);
+	mode->clock = refresh_rate * mode->hdisplay * mode->vdisplay;
 	drm_mode_set_name(mode);
 
 	out->timing_mode_id = id;
 	out->color_mode_id = best_color_mode;
 
-#if 0
 	printk("mode: %lld:%lld: %lldx%lld@%d\n",
 		id, best_color_mode, horiz.active, vert.active,
-	        (s32) (vert.sync_rate >> 16));
-#endif
+	        refresh_rate);
 	return 0;
 }
 
@@ -351,7 +350,6 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 	struct dcp_display_mode *modes = NULL;
 
 	dcp_parse_foreach_in_array(handle, it) {
-		printk("%u modes\n", it.len);
 		if (!modes)
 			modes = kmalloc_array(it.len, sizeof(*modes), GFP_KERNEL);
 		if (!modes)
