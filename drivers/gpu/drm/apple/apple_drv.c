@@ -194,13 +194,6 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 	return 1;
 }
 
-static int apple_connector_mode_valid(struct drm_connector *connector,
-				      struct drm_display_mode *mode)
-{
-	/* STUB */
-	return MODE_OK;
-}
-
 static enum drm_connector_status
 apple_connector_detect(struct drm_connector *connector, bool force)
 {
@@ -308,7 +301,6 @@ static const struct drm_connector_funcs apple_connector_funcs = {
 
 static const struct drm_connector_helper_funcs apple_connector_helper_funcs = {
 	.get_modes		= apple_connector_get_modes,
-	.mode_valid		= apple_connector_mode_valid,
 };
 
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
