@@ -8,25 +8,25 @@
 #include <linux/slab.h>
 #include "parser.h"
 
-#define OSSERIALIZE_HDR 0xd3
+#define DCP_PARSE_HEADER 0xd3
 
-enum os_otype {
-	OS_OTYPE_DICTIONARY = 1,
-	OS_OTYPE_ARRAY = 2,
-	OS_OTYPE_INT64 = 4,
-	OS_OTYPE_STRING = 9,
-	OS_OTYPE_BLOB = 10,
-	OS_OTYPE_BOOL = 11
+enum dcp_parse_type {
+	DCP_TYPE_DICTIONARY = 1,
+	DCP_TYPE_ARRAY = 2,
+	DCP_TYPE_INT64 = 4,
+	DCP_TYPE_STRING = 9,
+	DCP_TYPE_BLOB = 10,
+	DCP_TYPE_BOOL = 11
 };
 
-struct os_tag {
+struct dcp_parse_tag {
 	unsigned int size : 24;
-	enum os_otype type : 5;
+	enum dcp_parse_type type : 5;
 	unsigned int padding : 2;
 	bool last : 1;
 } __packed;
 
-void *parse_bytes(struct dcp_parse_ctx *ctx, size_t count)
+static void *parse_bytes(struct dcp_parse_ctx *ctx, size_t count)
 {
 	void *ptr = ctx->blob + ctx->pos;
 
@@ -37,19 +37,19 @@ void *parse_bytes(struct dcp_parse_ctx *ctx, size_t count)
 	return ptr;
 }
 
-u32 *parse_u32(struct dcp_parse_ctx *ctx)
+static u32 *parse_u32(struct dcp_parse_ctx *ctx)
 {
 	return parse_bytes(ctx, sizeof(u32));
 }
 
-struct os_tag *parse_tag(struct dcp_parse_ctx *ctx)
+static struct dcp_parse_tag *parse_tag(struct dcp_parse_ctx *ctx)
 {
-	struct os_tag *tag;
+	struct dcp_parse_tag *tag;
 
 	/* Align to 32-bits */
 	ctx->pos = round_up(ctx->pos, 4);
 
-	tag = parse_bytes(ctx, sizeof(struct os_tag));
+	tag = parse_bytes(ctx, sizeof(struct dcp_parse_tag));
 
 	if (IS_ERR(tag))
 		return tag;
@@ -60,9 +60,10 @@ struct os_tag *parse_tag(struct dcp_parse_ctx *ctx)
 	return tag;
 }
 
-struct os_tag *parse_tag_type(struct dcp_parse_ctx *ctx, enum os_otype type)
+static struct dcp_parse_tag *parse_tag_of_type(struct dcp_parse_ctx *ctx,
+					       enum dcp_parse_type type)
 {
-	struct os_tag *tag = parse_tag(ctx);
+	struct dcp_parse_tag *tag = parse_tag(ctx);
 
 	if (IS_ERR(tag))
 		return tag;
@@ -73,9 +74,9 @@ struct os_tag *parse_tag_type(struct dcp_parse_ctx *ctx, enum os_otype type)
 	return tag;
 }
 
-int skip(struct dcp_parse_ctx *handle)
+static int skip(struct dcp_parse_ctx *handle)
 {
-	struct os_tag *tag = parse_tag(handle);
+	struct dcp_parse_tag *tag = parse_tag(handle);
 	int ret = 0;
 	int i;
 
@@ -83,30 +84,30 @@ int skip(struct dcp_parse_ctx *handle)
 		return PTR_ERR(tag);
 
 	switch (tag->type) {
-	case OS_OTYPE_DICTIONARY:
+	case DCP_TYPE_DICTIONARY:
 		for (i = 0; i < tag->size; ++i) {
-			ret |= skip(handle);
-			ret |= skip(handle);
+			ret |= skip(handle); /* key */
+			ret |= skip(handle); /* value */
 		}
 
 		return ret;
 
-	case OS_OTYPE_ARRAY:
+	case DCP_TYPE_ARRAY:
 		for (i = 0; i < tag->size; ++i)
 			ret |= skip(handle);
 
 		return ret;
 
-	case OS_OTYPE_INT64:
+	case DCP_TYPE_INT64:
 		handle->pos += sizeof(s64);
 		return 0;
 
-	case OS_OTYPE_STRING:
-	case OS_OTYPE_BLOB:
+	case DCP_TYPE_STRING:
+	case DCP_TYPE_BLOB:
 		handle->pos += tag->size;
 		return 0;
 
-	case OS_OTYPE_BOOL:
+	case DCP_TYPE_BOOL:
 		return 0;
 
 	default:
@@ -114,10 +115,10 @@ int skip(struct dcp_parse_ctx *handle)
 	}
 }
 
-/* Caller must free */
-char *parse_string(struct dcp_parse_ctx *handle)
+/* Caller must free the result */
+static char *parse_string(struct dcp_parse_ctx *handle)
 {
-	struct os_tag *tag = parse_tag_type(handle, OS_OTYPE_STRING);
+	struct dcp_parse_tag *tag = parse_tag_of_type(handle, DCP_TYPE_STRING);
 	const char *in;
 	char *out;
 
@@ -135,9 +136,9 @@ char *parse_string(struct dcp_parse_ctx *handle)
 	return out;
 }
 
-int parse_int64(struct dcp_parse_ctx *handle, s64 *value)
+static int parse_int(struct dcp_parse_ctx *handle, s64 *value)
 {
-	void *tag = parse_tag_type(handle, OS_OTYPE_INT64);
+	void *tag = parse_tag_of_type(handle, DCP_TYPE_INT64);
 	s64 *in;
 
 	if (IS_ERR(tag))
@@ -152,9 +153,9 @@ int parse_int64(struct dcp_parse_ctx *handle, s64 *value)
 	return 0;
 }
 
-int parse_bool(struct dcp_parse_ctx *handle, bool *b)
+static int parse_bool(struct dcp_parse_ctx *handle, bool *b)
 {
-	struct os_tag *tag = parse_tag_type(handle, OS_OTYPE_BOOL);
+	struct dcp_parse_tag *tag = parse_tag_of_type(handle, DCP_TYPE_BOOL);
 	if (IS_ERR(tag))
 		return PTR_ERR(tag);
 
@@ -168,17 +169,17 @@ struct iterator {
 	u32 len;
 };
 
-int iterator_begin(struct dcp_parse_ctx *handle, struct iterator *it, bool dictionary)
+int iterator_begin(struct dcp_parse_ctx *handle, struct iterator *it, bool dict)
 {
-	struct os_tag *tag;
-	enum os_otype type = dictionary ? OS_OTYPE_DICTIONARY : OS_OTYPE_ARRAY;
+	struct dcp_parse_tag *tag;
+	enum dcp_parse_type type = dict ? DCP_TYPE_DICTIONARY : DCP_TYPE_ARRAY;
 
 	*it = (struct iterator) {
 		.handle = handle,
 		.idx = 0
 	};
 
-	tag = parse_tag_type(it->handle, type);
+	tag = parse_tag_of_type(it->handle, type);
 	if (IS_ERR(tag))
 		return PTR_ERR(tag);
 
@@ -186,9 +187,9 @@ int iterator_begin(struct dcp_parse_ctx *handle, struct iterator *it, bool dicti
 	return 0;
 }
 
-#define foreach_in_array(handle, it) \
+#define dcp_parse_foreach_in_array(handle, it) \
 	for (iterator_begin(handle, &it, false); it.idx < it.len; ++it.idx)
-#define foreach_in_dict(handle, it) \
+#define dcp_parse_foreach_in_dict(handle, it) \
 	for (iterator_begin(handle, &it, true); it.idx < it.len; ++it.idx)
 
 int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx)
@@ -205,7 +206,7 @@ int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx)
 	if (IS_ERR(header))
 		return PTR_ERR(header);
 
-	if (*header != OSSERIALIZE_HDR)
+	if (*header != DCP_PARSE_HEADER)
 		return -EINVAL;
 
 	return 0;
@@ -216,31 +217,31 @@ struct dimension {
 	s64 sync_rate, precise_sync_rate;
 };
 
-int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
+static int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
 {
 	struct iterator it;
 	int ret = 0;
 
-	foreach_in_dict(handle, it) {
+	dcp_parse_foreach_in_dict(handle, it) {
 		char *key = parse_string(it.handle);
 
 		if (IS_ERR(key))
 			return PTR_ERR(handle);
 
 		if (!strcmp(key, "Active"))
-			ret = parse_int64(it.handle, &dim->active);
+			ret = parse_int(it.handle, &dim->active);
 		else if (!strcmp(key, "Total"))
-			ret = parse_int64(it.handle, &dim->total);
+			ret = parse_int(it.handle, &dim->total);
 		else if (!strcmp(key, "FrontPorch"))
-			ret = parse_int64(it.handle, &dim->front_porch);
+			ret = parse_int(it.handle, &dim->front_porch);
 		else if (!strcmp(key, "BackPorch"))
-			ret = parse_int64(it.handle, &dim->back_porch);
+			ret = parse_int(it.handle, &dim->back_porch);
 		else if (!strcmp(key, "SyncWidth"))
-			ret = parse_int64(it.handle, &dim->sync_width);
+			ret = parse_int(it.handle, &dim->sync_width);
 		else if (!strcmp(key, "SyncRate"))
-			ret = parse_int64(it.handle, &dim->sync_rate);
+			ret = parse_int(it.handle, &dim->sync_rate);
 		else if (!strcmp(key, "PreciseSyncRate"))
-			ret = parse_int64(it.handle, &dim->precise_sync_rate);
+			ret = parse_int(it.handle, &dim->precise_sync_rate);
 		else
 			skip(it.handle);
 
@@ -251,7 +252,7 @@ int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
 	return 0;
 }
 
-int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
+static int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 {
 	struct iterator outer_it;
 	int ret = 0;
@@ -259,20 +260,20 @@ int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 
 	*best_id = -1;
 
-	foreach_in_array(handle, outer_it) {
+	dcp_parse_foreach_in_array(handle, outer_it) {
 		struct iterator it;
 		s64 score = -1, id = -1;
 
-		foreach_in_dict(handle, it) {
+		dcp_parse_foreach_in_dict(handle, it) {
 			char *key = parse_string(it.handle);
 
 			if (IS_ERR(key))
 				return PTR_ERR(key);
 
 			if (!strcmp(key, "Score"))
-				ret = parse_int64(it.handle, &score);
+				ret = parse_int(it.handle, &score);
 			else if (!strcmp(key, "ID"))
-				ret = parse_int64(it.handle, &id);
+				ret = parse_int(it.handle, &id);
 			else
 				skip(it.handle);
 
@@ -293,7 +294,7 @@ int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 	return 0;
 }
 
-int parse_mode(struct dcp_parse_ctx *handle)
+static int parse_mode(struct dcp_parse_ctx *handle)
 {
 	int ret = 0;
 	struct iterator it;
@@ -301,7 +302,7 @@ int parse_mode(struct dcp_parse_ctx *handle)
 	s64 id = -1;
 	s64 best_color_mode = -1;
 
-	foreach_in_dict(handle, it) {
+	dcp_parse_foreach_in_dict(handle, it) {
 		char *key = parse_string(it.handle);
 
 		if (IS_ERR(key))
@@ -314,7 +315,7 @@ int parse_mode(struct dcp_parse_ctx *handle)
 		else if (!strcmp(key, "ColorModes"))
 			ret = parse_color_modes(it.handle, &best_color_mode);
 		else if (!strcmp(key, "ID"))
-			ret = parse_int64(it.handle, &id);
+			ret = parse_int(it.handle, &id);
 		else
 			skip(it.handle);
 
@@ -334,7 +335,7 @@ int enumerate_modes(struct dcp_parse_ctx *handle)
 	struct iterator it;
 	int ret;
 
-	foreach_in_array(handle, it) {
+	dcp_parse_foreach_in_array(handle, it) {
 		ret = parse_mode(it.handle);
 
 		if (ret)
