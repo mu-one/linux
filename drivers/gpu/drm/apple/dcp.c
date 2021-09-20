@@ -654,6 +654,7 @@ static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 
 	connector->connected = !!(*connected);
 
+	printk("hpd\n");
 	if (dev && dev->registered)
 		drm_kms_helper_hotplug_event(dev);
 
