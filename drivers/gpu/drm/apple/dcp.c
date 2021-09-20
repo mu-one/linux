@@ -538,6 +538,7 @@ static bool dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
 
 static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 {
+	struct apple_connector *connector = dcp->connector;
 	struct dcp_set_dcpav_prop_end_req *req = in;
 	u8 *resp = out;
 	struct dcp_parse_ctx ctx;
@@ -558,11 +559,18 @@ static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 	}
 
 	if (!strcmp(req->key, "TimingElements")) {
-		if (enumerate_modes(&ctx)) {
+		struct dcp_display_mode *modes;
+
+		modes = enumerate_modes(&ctx, &connector->nr_modes);
+
+		if (IS_ERR(modes)) {
 			dev_warn(dcp->dev, "failed to parse modes\n");
+			connector->nr_modes = 0;
 			*resp = false;
 			goto reset;
 		}
+
+		connector->modes = modes;
 	}
 
 	*resp = true;

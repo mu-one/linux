@@ -5,6 +5,9 @@ struct apple_crtc;
 struct apple_connector {
 	struct drm_connector base;
 	bool connected;
+
+	struct dcp_display_mode *modes;
+	unsigned int nr_modes;
 };
 
 #define to_apple_connector(x) container_of(x, struct apple_connector, base)

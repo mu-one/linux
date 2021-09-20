@@ -23,6 +23,7 @@ struct dcp_display_mode {
 };
 
 int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx);
-int enumerate_modes(struct dcp_parse_ctx *handle);
+struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
+					 unsigned int *count);
 
 #endif

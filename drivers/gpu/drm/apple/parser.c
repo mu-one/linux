@@ -343,7 +343,7 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 	return 0;
 }
 
-int enumerate_modes(struct dcp_parse_ctx *handle)
+struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle, unsigned int *count)
 {
 	struct iterator it;
 	int ret;
@@ -352,12 +352,15 @@ int enumerate_modes(struct dcp_parse_ctx *handle)
 	dcp_parse_foreach_in_array(handle, it) {
 		if (!modes)
 			modes = kmalloc_array(it.len, sizeof(*modes), GFP_KERNEL);
+		if (!modes)
+			return ERR_PTR(-ENOMEM);
 
 		ret = parse_mode(it.handle, &modes[it.idx]);
 
 		if (ret)
-			return ret;
+			return ERR_PTR(ret);
 	}
 
-	return 0;
+	*count = it.len;
+	return modes;
 }
