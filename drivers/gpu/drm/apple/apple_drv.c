@@ -175,6 +175,7 @@ static int apple_connector_get_modes(struct drm_connector *connector)
 	struct drm_display_mode *mode;
 
 	/* STUB */
+	printk("get modes\n");
 
 	struct drm_display_mode dummy = {
 		DRM_SIMPLE_MODE(1920*2, 1080*2, 508, 286),
