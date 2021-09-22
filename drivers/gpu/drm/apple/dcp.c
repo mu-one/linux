@@ -268,22 +268,6 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT, dcpep_ack(context));
 }
 
-static void dcp_set_4k(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	dcp_callback_t cb = cookie;
-
-	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(dcp->mode),
-		 sizeof(u32), &dcp->mode, cb, NULL);
-}
-
-static void dcp_modeset(struct apple_dcp *dcp, dcp_callback_t cb)
-{
-	u32 handle = 2;
-
-	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
-		 sizeof(u32), &handle, dcp_set_4k, cb);
-}
-
 /* DCP callback handlers */
 static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
@@ -843,9 +827,9 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 }
 
 /*
- * DRM specifies rectangles as a product of semi-open intervals [x1, x2) x [y1,
- * y2). DCP specifies rectangles as a start coordinate and a width/height
- * <x1, y1> + <w, h>. Convert between these forms.
+ * DRM specifies rectangles as start and end coordinates.  DCP specifies
+ * rectangles as a start coordinate and a width/height. Convert a DRM rectangle
+ * to a DCP rectangle.
  */
 struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 {
@@ -855,16 +839,6 @@ struct dcp_rect drm_to_dcp_rect(struct drm_rect *rect)
 		.w = drm_rect_width(rect),
 		.h = drm_rect_height(rect)
 	};
-}
-
-static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
-{
-	struct dcp_swap_start_req start_req = { 0 };
-
-	dcp_push(dcp, false, dcp_swap_start,
-		 sizeof(struct dcp_swap_start_req),
-		 sizeof(struct dcp_swap_start_resp),
-		 &start_req, dcp_swap_started, NULL);
 }
 
 int dcp_get_modes(struct drm_connector *connector)
@@ -878,9 +852,8 @@ int dcp_get_modes(struct drm_connector *connector)
 	int i;
 
 	for (i = 0; i < dcp->nr_modes; ++i) {
-		struct drm_display_mode _ = dcp->modes[i].mode;
+		mode = drm_mode_duplicate(dev, &dcp->modes[i].mode);
 
-		mode = drm_mode_duplicate(dev, &_);
 		if (!mode) {
 			dev_err(dev->dev, "Failed to create a new display mode\n");
 			return 0;
@@ -892,12 +865,16 @@ int dcp_get_modes(struct drm_connector *connector)
 	return dcp->nr_modes;
 }
 
-static struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp, struct drm_display_mode *mode)
+/* The user may own drm_display_mode, so we need to search for our copy */
+static struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp,
+					    struct drm_display_mode *mode)
 {
 	int i;
 
 	for (i = 0; i < dcp->nr_modes; ++i) {
-		if (drm_mode_match(mode, &dcp->modes[i].mode, DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK))
+		if (drm_mode_match(mode, &dcp->modes[i].mode,
+				   DRM_MODE_MATCH_TIMINGS |
+				   DRM_MODE_MATCH_CLOCK))
 			return &dcp->modes[i];
 	}
 
@@ -912,6 +889,31 @@ int dcp_mode_valid(struct drm_connector *connector,
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 
 	return lookup_mode(dcp, mode) ? MODE_OK : MODE_BAD;
+}
+
+/* Helpers to modeset and swap, used to flush */
+static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
+{
+	struct dcp_swap_start_req start_req = { 0 };
+
+	dcp_push(dcp, false, dcp_swap_start,
+		 sizeof(struct dcp_swap_start_req),
+		 sizeof(struct dcp_swap_start_resp),
+		 &start_req, dcp_swap_started, NULL);
+}
+
+static void dcp_modeset_2(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(dcp->mode),
+		 sizeof(u32), &dcp->mode, do_swap, NULL);
+}
+
+static void dcp_modeset_and_swap(struct apple_dcp *dcp)
+{
+	u32 handle = 2;
+
+	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
+		 sizeof(u32), &handle, dcp_modeset_2, NULL);
 }
 
 void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
@@ -1002,7 +1004,7 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 			.dp_timing_mode_id = mode->timing_mode_id
 		};
 
-		dcp_modeset(dcp, do_swap);
+		dcp_modeset_and_swap(dcp);
 	} else
 		do_swap(dcp, NULL, NULL);
 
