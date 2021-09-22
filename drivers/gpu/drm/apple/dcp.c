@@ -892,16 +892,26 @@ int dcp_get_modes(struct drm_connector *connector)
 	return dcp->nr_modes;
 }
 
-struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp, struct drm_display_mode *mode)
+static struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp, struct drm_display_mode *mode)
 {
 	int i;
 
 	for (i = 0; i < dcp->nr_modes; ++i) {
-		if (drm_mode_equal(mode, &dcp->modes[i].mode))
+		if (drm_mode_match(mode, &dcp->modes[i].mode, DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK))
 			return &dcp->modes[i];
 	}
 
 	return NULL;
+}
+
+int dcp_mode_valid(struct drm_connector *connector,
+                   struct drm_display_mode *mode)
+{
+	struct apple_connector *apple_connector = to_apple_connector(connector);
+	struct platform_device *pdev = apple_connector->dcp;
+	struct apple_dcp *dcp = platform_get_drvdata(pdev);
+
+	return lookup_mode(dcp, mode) ? MODE_OK : MODE_BAD;
 }
 
 void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
@@ -981,6 +991,12 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 		struct dcp_display_mode *mode;
 
 		mode = lookup_mode(dcp, &crtc_state->mode);
+
+		if (WARN(!mode, "cannot find mode")) {
+			printk("%ux%u %u\n", crtc_state->mode.hdisplay, crtc_state->mode.vdisplay, crtc_state->active);
+			do_swap(dcp, NULL, NULL);
+			return;
+		}
 
 		dcp->mode = (struct dcp_set_digital_out_mode_req) {
 			.dp_color_mode_id = mode->color_mode_id,

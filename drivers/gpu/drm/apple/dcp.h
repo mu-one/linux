@@ -40,3 +40,5 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state);
 bool dcp_is_initialized(struct platform_device *pdev);
 void apple_crtc_vblank(struct apple_crtc *apple);
 int dcp_get_modes(struct drm_connector *connector);
+int dcp_mode_valid(struct drm_connector *connector,
+                   struct drm_display_mode *mode);

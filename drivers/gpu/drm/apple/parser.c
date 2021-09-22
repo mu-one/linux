@@ -301,6 +301,7 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 	struct dimension horiz, vert;
 	s64 id = -1;
 	s64 best_color_mode = -1;
+	u32 refresh_rate;
 
 	struct drm_display_mode *mode = &out->mode;
 
@@ -329,7 +330,11 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 		DRM_SIMPLE_MODE(horiz.active, vert.active, 508, 286)
 	};
 
-	mode->clock = (vert.sync_rate >> 16) * mode->hdisplay * mode->vdisplay;
+	refresh_rate = vert.sync_rate >> 16;
+
+	/* Pixel clock specified in khz */
+	mode->clock = DIV_ROUND_CLOSEST_ULL(refresh_rate * mode->hdisplay * mode->vdisplay, 1000);
+
 	drm_mode_set_name(mode);
 
 	out->timing_mode_id = id;
