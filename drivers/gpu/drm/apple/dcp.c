@@ -957,9 +957,7 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 		req->swap.surf_ids[l] = 3 + l; // XXX
 
 		req->surf[l] = (struct dcp_surface) {
-			// TODO: format lookup XXX
-			//.format = dcp_formats[fb->format->format].dcp,
-			.format = dcp_formats[0].dcp,
+			.format = drm_format_to_dcp(fb->format->format),
 			.stride = fb->pitches[0],
 			.width = fb->width,
 			.height = fb->height,

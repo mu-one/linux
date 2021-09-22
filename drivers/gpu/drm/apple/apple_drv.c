@@ -136,16 +136,11 @@ struct drm_plane *apple_plane_init(struct drm_device *dev, enum drm_plane_type t
 {
 	int ret;
 	struct drm_plane *plane;
-	u32 plane_formats[ARRAY_SIZE(dcp_formats)];
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(dcp_formats); ++i)
-		plane_formats[i] = dcp_formats[i].drm;
 
 	plane = devm_kzalloc(dev->dev, sizeof(*plane), GFP_KERNEL);
 
 	ret = drm_universal_plane_init(dev, plane, 0x1, &apple_plane_funcs,
-				       plane_formats, ARRAY_SIZE(dcp_formats),
+				       dcp_formats, ARRAY_SIZE(dcp_formats),
 				       apple_format_modifiers, type, NULL);
 
 	drm_plane_helper_add(plane, &apple_plane_helper_funcs);

@@ -23,17 +23,34 @@ struct apple_connector {
  * XXX: we don't have non-alpha formats but userspace breaks without XRGB. It
  * doesn't matter for the primary plane but matters for cursors/overlays.
  */
-static const struct dcp_format {
-	u32 drm;
-	u32 dcp;
-} dcp_formats[] = {
-	{ DRM_FORMAT_XRGB8888, fourcc_code('A', 'R', 'G', 'B') },
-	{ DRM_FORMAT_ARGB8888, fourcc_code('A', 'R', 'G', 'B') },
-	{ DRM_FORMAT_XBGR8888, fourcc_code('A', 'B', 'G', 'R') },
-	{ DRM_FORMAT_ABGR8888, fourcc_code('A', 'B', 'G', 'R') },
-	{ DRM_FORMAT_BGRA8888, fourcc_code('B', 'G', 'R', 'A') },
-	{ DRM_FORMAT_BGRX8888, fourcc_code('B', 'G', 'R', 'A') },
+static const u32 dcp_formats[] = {
+	DRM_FORMAT_XRGB8888,
+	DRM_FORMAT_ARGB8888,
+	DRM_FORMAT_XBGR8888,
+	DRM_FORMAT_ABGR8888,
+	DRM_FORMAT_BGRA8888,
+	DRM_FORMAT_BGRX8888,
 };
+
+static inline u32 drm_format_to_dcp(u32 drm)
+{
+	switch (drm) {
+	case DRM_FORMAT_XRGB8888:
+	case DRM_FORMAT_ARGB8888:
+		return fourcc_code('A', 'R', 'G', 'B');
+
+	case DRM_FORMAT_XBGR8888:
+	case DRM_FORMAT_ABGR8888:
+		return fourcc_code('A', 'B', 'G', 'R');
+
+	case DRM_FORMAT_BGRA8888:
+	case DRM_FORMAT_BGRX8888:
+		return fourcc_code('B', 'G', 'R', 'A');
+
+	default:
+		BUG();
+	}
+}
 
 void dcp_link(struct platform_device *pdev, struct apple_crtc *apple, struct apple_connector *connector);
 void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state);
