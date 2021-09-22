@@ -20,6 +20,8 @@ struct apple_connector {
  *
  * TODO: DCP supports a large number of YUV formats. Support these.
  *
+ * TODO: There is an ARGB fourcc, but it doesn't work as DRM_FORMAT_BGRA8888
+ *
  * XXX: we don't have non-alpha formats but userspace breaks without XRGB. It
  * doesn't matter for the primary plane but matters for cursors/overlays.
  */
@@ -28,8 +30,6 @@ static const u32 dcp_formats[] = {
 	DRM_FORMAT_ARGB8888,
 	DRM_FORMAT_XBGR8888,
 	DRM_FORMAT_ABGR8888,
-	DRM_FORMAT_BGRA8888,
-	DRM_FORMAT_BGRX8888,
 };
 
 static inline u32 drm_format_to_dcp(u32 drm)
@@ -42,10 +42,6 @@ static inline u32 drm_format_to_dcp(u32 drm)
 	case DRM_FORMAT_XBGR8888:
 	case DRM_FORMAT_ABGR8888:
 		return fourcc_code('A', 'B', 'G', 'R');
-
-	case DRM_FORMAT_BGRA8888:
-	case DRM_FORMAT_BGRX8888:
-		return fourcc_code('B', 'G', 'R', 'A');
 
 	default:
 		BUG();
