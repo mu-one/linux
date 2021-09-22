@@ -291,17 +291,11 @@ static bool dcpep_cb_zero(struct apple_dcp *dcp, void *out, void *in)
 static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_get_uint_prop_resp *resp = out;
-	struct dcp_get_uint_prop_req *req = in;
 
-	char obj[4 + 1] = { 0 };
-	char key[0x40 + 1] = { 0 };
-
-	memcpy(obj, req->obj, sizeof(req->obj));
-	memcpy(key, req->key, sizeof(req->key));
-
-	dev_info(dcp->dev, "ignoring property request %s:%s\n", obj, key);
+	/* unimplemented for now */
 
 	resp->value = 0;
+	resp->ret = 0;
 	return true;
 }
 
