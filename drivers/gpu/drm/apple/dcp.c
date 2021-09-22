@@ -993,7 +993,6 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 		mode = lookup_mode(dcp, &crtc_state->mode);
 
 		if (WARN(!mode, "cannot find mode")) {
-			printk("%ux%u %u\n", crtc_state->mode.hdisplay, crtc_state->mode.vdisplay, crtc_state->active);
 			do_swap(dcp, NULL, NULL);
 			return;
 		}
