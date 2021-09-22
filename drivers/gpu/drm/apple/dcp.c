@@ -921,6 +921,9 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 		return;
 	}
 
+	/* Reset to defaults */
+	memset(req, 0, sizeof(*req));
+
 	for_each_oldnew_plane_in_state(state, plane, old_state, new_state, l) {
 		struct drm_framebuffer *fb = new_state->fb;
 		struct drm_rect src_rect;
