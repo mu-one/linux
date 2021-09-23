@@ -214,7 +214,7 @@ int parse(void *blob, size_t size, struct dcp_parse_ctx *ctx)
 
 struct dimension {
 	s64 total, front_porch, sync_width, back_porch, active;
-	s64 sync_rate, precise_sync_rate;
+	s64 precise_sync_rate;
 };
 
 static int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
@@ -238,8 +238,6 @@ static int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
 			ret = parse_int(it.handle, &dim->back_porch);
 		else if (!strcmp(key, "SyncWidth"))
 			ret = parse_int(it.handle, &dim->sync_width);
-		else if (!strcmp(key, "SyncRate"))
-			ret = parse_int(it.handle, &dim->sync_rate);
 		else if (!strcmp(key, "PreciseSyncRate"))
 			ret = parse_int(it.handle, &dim->precise_sync_rate);
 		else
