@@ -156,6 +156,7 @@ static int parse_int(struct dcp_parse_ctx *handle, s64 *value)
 static int parse_bool(struct dcp_parse_ctx *handle, bool *b)
 {
 	struct dcp_parse_tag *tag = parse_tag_of_type(handle, DCP_TYPE_BOOL);
+
 	if (IS_ERR(tag))
 		return PTR_ERR(tag);
 
@@ -165,8 +166,7 @@ static int parse_bool(struct dcp_parse_ctx *handle, bool *b)
 
 struct iterator {
 	struct dcp_parse_ctx *handle;
-	u32 idx;
-	u32 len;
+	u32 idx, len;
 };
 
 int iterator_begin(struct dcp_parse_ctx *handle, struct iterator *it, bool dict)
