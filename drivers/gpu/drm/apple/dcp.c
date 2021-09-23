@@ -966,6 +966,14 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 			continue;
 		}
 
+		// XXX: awful hack! race condition between a framebuffer unbind
+		// getting swapped out and GEM unreferencing a framebuffer. If
+		// we lose the race, the display gets IOVA faults and the DCP
+		// crashes. We need to extend the lifetime of the
+		// drm_framebuffer (and hence the GEM object) until after we
+		// get a swap complete for the swap unbinding it.
+		drm_framebuffer_get(fb);
+
 		req->surf_iova[l] = drm_fb_cma_get_gem_addr(fb, new_state, 0);
 
 		drm_rect_fp_to_int(&src_rect, &new_state->src);
