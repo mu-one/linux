@@ -104,12 +104,13 @@ static int apple_plane_atomic_check(struct drm_plane *plane,
 static void apple_plane_atomic_disable(struct drm_plane *plane,
 				       struct drm_atomic_state *state)
 {
-	/* TODO */
+	/* Handled in atomic_flush */
 }
 
 static void apple_plane_atomic_update(struct drm_plane *plane,
 				      struct drm_atomic_state *state)
 {
+	/* Handled in atomic_flush */
 }
 
 static const struct drm_plane_helper_funcs apple_plane_helper_funcs = {
