@@ -633,11 +633,14 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 }
 
 /*
- * Helper to send a DRM hotplug event. This must be done from a separate thread
- * than that which processes the hotplug event from the DCP, since
- * drm_kms_helper_hotplug_event will wait for a vblank that will be issued by
- * the very thread that handled the DCP hotplug event. By splitting off with a
- * workqueue, the race is eliminated.
+ * Helper to send a DRM hotplug event. DCP is accessed from a single (RTKit)
+ * thread. However, drm_kms_helper_hotplug_event does an atomic commit and
+ * waits for vblank. Since these require talking to the DCP, we can't call it
+ * from the RTKit thread.
+ *
+ * We need to call drm_kms_helper_hotplug_event in response to a DCP
+ * hotplug_notify_gated callback.  To do so safely and without deadlock, we
+ * move the call to a separate thread via a workqueue.
  */
 void dcp_hotplug(struct work_struct *work)
 {
