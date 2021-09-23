@@ -323,6 +323,8 @@ static int apple_probe_per_dcp(struct device *dev,
 	connector->connected = true; /* XXX */
 	connector->dcp = dcp;
 
+	INIT_WORK(&connector->hotplug_wq, dcp_hotplug);
+
 	crtc->dcp = dcp;
 	dcp_link(dcp, crtc, connector);
 

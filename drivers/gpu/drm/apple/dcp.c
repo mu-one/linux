@@ -632,16 +632,33 @@ static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
+/*
+ * Helper to send a DRM hotplug event. This must be done from a separate thread
+ * than that which processes the hotplug event from the DCP, since
+ * drm_kms_helper_hotplug_event will wait for a vblank that will be issued by
+ * the very thread that handled the DCP hotplug event. By splitting off with a
+ * workqueue, the race is eliminated.
+ */
+void dcp_hotplug(struct work_struct *work)
+{
+	struct apple_connector *connector;
+	struct drm_device *dev;
+
+	connector = container_of(work, struct apple_connector, hotplug_wq);
+	dev = connector->base.dev;
+
+	if (dev && dev->registered)
+		drm_kms_helper_hotplug_event(dev);
+}
+
 static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct apple_connector *connector = dcp->connector;
-	struct drm_device *dev = connector->base.dev;
 	u64 *connected = in;
 
 	connector->connected = !!(*connected);
 
-	if (dev && dev->registered)
-		drm_kms_helper_hotplug_event(dev);
+	schedule_work(&connector->hotplug_wq);
 
 	return true;
 }

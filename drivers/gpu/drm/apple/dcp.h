@@ -3,11 +3,16 @@
 
 struct apple_crtc;
 
+void dcp_hotplug(struct work_struct *work);
+
 struct apple_connector {
 	struct drm_connector base;
 	bool connected;
 
 	struct platform_device *dcp;
+
+	/* Workqueue for sending hotplug events to the associated device */
+	struct work_struct hotplug_wq;
 };
 
 #define to_apple_connector(x) container_of(x, struct apple_connector, base)
