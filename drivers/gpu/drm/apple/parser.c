@@ -294,6 +294,20 @@ static int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 	return 0;
 }
 
+/*
+ * Calculate the pixel clock for a mode given the 16:16 fixed-point refresh
+ * rate. The pixel clock is the refresh rate times the pixel count. DRM
+ * specifies the clock in kHz. The intermediate result may overflow a u32, so
+ * use a u64 where required.
+ */
+static void set_pixel_clock(struct drm_display_mode *mode, u32 refresh_rate)
+{
+	u32 pixels = mode->hdisplay * mode->vdisplay;
+	u64 clock = mul_u32_u32(pixels, refresh_rate);
+
+	mode->clock = DIV_ROUND_CLOSEST_ULL(clock >> 16, 1000);
+}
+
 static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out)
 {
 	int ret = 0;
@@ -301,7 +315,6 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 	struct dimension horiz, vert;
 	s64 id = -1;
 	s64 best_color_mode = -1;
-	u32 refresh_rate;
 
 	struct drm_display_mode *mode = &out->mode;
 
@@ -330,11 +343,7 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 		DRM_SIMPLE_MODE(horiz.active, vert.active, 508, 286)
 	};
 
-	refresh_rate = vert.sync_rate >> 16;
-
-	/* Pixel clock specified in khz */
-	mode->clock = DIV_ROUND_CLOSEST_ULL(refresh_rate * mode->hdisplay * mode->vdisplay, 1000);
-
+	set_pixel_clock(mode, vert.precise_sync_rate);
 	drm_mode_set_name(mode);
 
 	out->timing_mode_id = id;
