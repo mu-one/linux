@@ -298,12 +298,12 @@ static int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
  * specifies the clock in kHz. The intermediate result may overflow a u32, so
  * use a u64 where required.
  */
-static void set_pixel_clock(struct drm_display_mode *mode, u32 refresh_rate)
+static u32 calculate_clock(struct dimension *horiz, struct dimension *vert)
 {
-	u32 pixels = mode->hdisplay * mode->vdisplay;
-	u64 clock = mul_u32_u32(pixels, refresh_rate);
+	u32 pixels = horiz->total * vert->total;
+	u64 clock = mul_u32_u32(pixels, vert->precise_sync_rate);
 
-	mode->clock = DIV_ROUND_CLOSEST_ULL(clock >> 16, 1000);
+	return DIV_ROUND_CLOSEST_ULL(clock >> 16, 1000);
 }
 
 static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out)
@@ -338,10 +338,25 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 	}
 
 	*mode = (struct drm_display_mode) {
-		DRM_SIMPLE_MODE(horiz.active, vert.active, 508, 286)
+		.type = DRM_MODE_TYPE_DRIVER,
+		.clock = calculate_clock(&horiz, &vert),
+
+		.vdisplay = vert.active,
+		.vsync_start = vert.active + vert.front_porch,
+		.vsync_end = vert.active + vert.front_porch + vert.sync_width,
+		.vtotal = vert.total,
+
+		.hdisplay = horiz.active,
+		.hsync_start = horiz.active + horiz.front_porch,
+		.hsync_end = horiz.active + horiz.front_porch +
+			     horiz.sync_width,
+		.htotal = horiz.total,
+
+		/* TODO: what to set these to? */
+		.width_mm = 508,
+		.height_mm = 286,
 	};
 
-	set_pixel_clock(mode, vert.precise_sync_rate);
 	drm_mode_set_name(mode);
 
 	out->timing_mode_id = id;
