@@ -226,9 +226,8 @@ static int parse_dimension(struct dcp_parse_ctx *handle, struct dimension *dim)
 		char *key = parse_string(it.handle);
 
 		if (IS_ERR(key))
-			return PTR_ERR(handle);
-
-		if (!strcmp(key, "Active"))
+			ret = PTR_ERR(handle);
+		else if (!strcmp(key, "Active"))
 			ret = parse_int(it.handle, &dim->active);
 		else if (!strcmp(key, "Total"))
 			ret = parse_int(it.handle, &dim->total);
@@ -264,9 +263,8 @@ static int parse_color_modes(struct dcp_parse_ctx *handle, s64 *best_id)
 			char *key = parse_string(it.handle);
 
 			if (IS_ERR(key))
-				return PTR_ERR(key);
-
-			if (!strcmp(key, "Score"))
+				ret = PTR_ERR(key);
+			else if (!strcmp(key, "Score"))
 				ret = parse_int(it.handle, &score);
 			else if (!strcmp(key, "ID"))
 				ret = parse_int(it.handle, &id);
@@ -318,9 +316,8 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 		char *key = parse_string(it.handle);
 
 		if (IS_ERR(key))
-			return PTR_ERR(key);
-
-		if (!strcmp(key, "HorizontalAttributes"))
+			ret = PTR_ERR(key);
+		else if (!strcmp(key, "HorizontalAttributes"))
 			ret = parse_dimension(it.handle, &horiz);
 		else if (!strcmp(key, "VerticalAttributes"))
 			ret = parse_dimension(it.handle, &vert);
