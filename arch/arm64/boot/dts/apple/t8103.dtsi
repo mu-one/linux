@@ -211,6 +211,7 @@
 
 			reg = <0x2 0x3b700000 0x0 0x14000>;
 
+/*
 			ps_imx: power-controller@1b8 {
 				domain-output-names = "imx";
 				compatible = "apple,t8103-pmgr-pstate", "apple,pmgr-pstate";
@@ -218,6 +219,7 @@
 				#power-domain-cells = <0>;
 				always-on;
 			};
+*/
 
 			ps_sio: power-controller@1c0 {
 				domain-output-names = "sio";
@@ -274,6 +276,7 @@
 				power-domains = <&ps_uart_p>;
 			};
 
+/*
 			ps_apcie: power-controller@348 {
 				domain-output-names = "apcie";
 				compatible = "apple,t8103-pmgr-pstate", "apple,pmgr-pstate";
@@ -281,6 +284,7 @@
 				#power-domain-cells = <0>;
 				power-domains = <&ps_imx>;
 			};
+*/
 
 			ps_ans2: power-controller@3f0 {
 				domain-output-names = "ans2";
@@ -289,6 +293,7 @@
 				#power-domain-cells = <0>;
 			};
 
+/*
 			ps_apcie_st: power-controller@418 {
 				domain-output-names = "apcie_st";
 				compatible = "apple,t8103-pmgr-pstate", "apple,pmgr-pstate";
@@ -296,6 +301,7 @@
 				#power-domain-cells = <0>;
 				power-domains = <&ps_apcie>;
 			};
+*/
 		};
 
 		spi3: spi@23510c000 {
@@ -732,6 +738,7 @@
 			interrupts = <AIC_IRQ 590 IRQ_TYPE_LEVEL_HIGH>;
 			mboxes = <&ans>;
 			apple,sart = <&sart>;
+			power-domains = <&ps_ans2>;
 		 };
 	};
 };
