@@ -298,6 +298,7 @@
 				#power-domain-cells = <0>;
 				#reset-cells = <0>;
 				apple,domain-name = "ans2";
+				power-domains = <&ps_apcie_st>;
 			};
 
 /*
