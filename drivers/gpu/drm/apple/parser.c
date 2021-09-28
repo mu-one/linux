@@ -302,14 +302,16 @@ static u32 calculate_clock(struct dimension *horiz, struct dimension *vert)
 	return DIV_ROUND_CLOSEST_ULL(clock >> 16, 1000);
 }
 
-static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out)
+static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *modes, unsigned int *count)
 {
 	int ret = 0;
 	struct iterator it;
 	struct dimension horiz, vert;
 	s64 id = -1;
 	s64 best_color_mode = -1;
+	bool is_virtual = false;
 
+	struct dcp_display_mode *out = &modes[*count];
 	struct drm_display_mode *mode = &out->mode;
 
 	dcp_parse_foreach_in_dict(handle, it) {
@@ -325,12 +327,22 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 			ret = parse_color_modes(it.handle, &best_color_mode);
 		else if (!strcmp(key, "ID"))
 			ret = parse_int(it.handle, &id);
+		else if (!strcmp(key, "IsVirtual"))
+			ret = parse_bool(it.handle, &is_virtual);
 		else
 			skip(it.handle);
 
 		if (ret)
 			return ret;
 	}
+
+	/*
+	 * We need to skip virtual modes. In some cases, virtual modes are "too
+	 * big" for the monitor and can cause breakage. It is unclear why the
+	 * DCP reports these modes at all.
+	 */
+	if (is_virtual)
+		return 0;
 
 	*mode = (struct drm_display_mode) {
 		.type = DRM_MODE_TYPE_DRIVER,
@@ -356,6 +368,7 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *out
 
 	out->timing_mode_id = id;
 	out->color_mode_id = best_color_mode;
+	(*count)++;
 
 	return 0;
 }
@@ -367,18 +380,19 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 	int ret;
 	struct dcp_display_mode *modes = NULL;
 
+	*count = 0;
+
 	dcp_parse_foreach_in_array(handle, it) {
 		if (!modes)
 			modes = kmalloc_array(it.len, sizeof(*modes), GFP_KERNEL);
 		if (!modes)
 			return ERR_PTR(-ENOMEM);
 
-		ret = parse_mode(it.handle, &modes[it.idx]);
+		ret = parse_mode(it.handle, modes, count);
 
 		if (ret)
 			return ERR_PTR(ret);
 	}
 
-	*count = it.len;
 	return modes;
 }
