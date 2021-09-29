@@ -930,8 +930,9 @@ static void dcp_modeset_and_swap(struct apple_dcp *dcp)
 		 sizeof(u32), &handle, dcp_modeset_2, NULL);
 }
 
-void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
+void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 {
+	struct platform_device *pdev = to_apple_crtc(crtc)->dcp;
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 	struct drm_plane *plane;
 	struct drm_plane_state *new_state, *old_state;

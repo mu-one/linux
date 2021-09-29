@@ -38,17 +38,6 @@
 /* T8103 has an internal DCP and an external DCP. TODO: support external dcp */
 #define MAX_COPROCESSORS 1
 
-struct apple_crtc {
-	struct drm_crtc base;
-	struct drm_pending_vblank_event *event;
-	bool vsync_disabled;
-
-	/* Reference to the DCP device owning this CRTC */
-	struct platform_device *dcp;
-};
-
-#define to_apple_crtc(x) container_of(x, struct apple_crtc, base)
-
 struct apple_drm_private {
 	struct drm_device drm;
 };
@@ -228,14 +217,6 @@ void apple_crtc_vblank(struct apple_crtc *crtc)
 	spin_unlock_irqrestore(&crtc->base.dev->event_lock, flags);
 }
 
-static void apple_crtc_atomic_flush(struct drm_crtc *crtc,
-				    struct drm_atomic_state *state)
-{
-	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
-
-	dcp_flush(apple_crtc->dcp, state);
-}
-
 static const struct drm_crtc_funcs apple_crtc_funcs = {
 	.atomic_destroy_state	= drm_atomic_helper_crtc_destroy_state,
 	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
@@ -277,7 +258,7 @@ static const struct drm_connector_helper_funcs apple_connector_helper_funcs = {
 
 static const struct drm_crtc_helper_funcs apple_crtc_helper_funcs = {
 	.atomic_begin		= apple_crtc_atomic_begin,
-	.atomic_flush		= apple_crtc_atomic_flush,
+	.atomic_flush		= dcp_flush,
 	.atomic_enable		= apple_crtc_atomic_enable,
 	.atomic_disable		= apple_crtc_atomic_disable,
 };

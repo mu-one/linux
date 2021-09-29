@@ -1,7 +1,16 @@
 #include <drm/drm_atomic.h>
 #include "parser.h"
 
-struct apple_crtc;
+struct apple_crtc {
+	struct drm_crtc base;
+	struct drm_pending_vblank_event *event;
+	bool vsync_disabled;
+
+	/* Reference to the DCP device owning this CRTC */
+	struct platform_device *dcp;
+};
+
+#define to_apple_crtc(x) container_of(x, struct apple_crtc, base)
 
 void dcp_hotplug(struct work_struct *work);
 
@@ -54,7 +63,7 @@ static inline u32 drm_format_to_dcp(u32 drm)
 }
 
 void dcp_link(struct platform_device *pdev, struct apple_crtc *apple, struct apple_connector *connector);
-void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state);
+void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state);
 bool dcp_is_initialized(struct platform_device *pdev);
 void apple_crtc_vblank(struct apple_crtc *apple);
 int dcp_get_modes(struct drm_connector *connector);
