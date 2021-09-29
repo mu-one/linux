@@ -132,11 +132,10 @@ struct drm_plane *apple_plane_init(struct drm_device *dev, enum drm_plane_type t
 	ret = drm_universal_plane_init(dev, plane, 0x1, &apple_plane_funcs,
 				       dcp_formats, ARRAY_SIZE(dcp_formats),
 				       apple_format_modifiers, type, NULL);
-
-	drm_plane_helper_add(plane, &apple_plane_helper_funcs);
-
 	if (ret)
 		return ERR_PTR(ret);
+
+	drm_plane_helper_add(plane, &apple_plane_helper_funcs);
 
 	return plane;
 }
@@ -359,8 +358,10 @@ static int apple_platform_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_unload;
 
-	/* IOMFB::UPPipeDCP_H13P::verify_surfaces produces the error "plane
-	 * requires a minimum of 32x32 for the source buffer" if smaller */
+	/*
+ 	 * IOMFB::UPPipeDCP_H13P::verify_surfaces produces the error "plane
+	 * requires a minimum of 32x32 for the source buffer" if smaller
+	 */
 	apple->drm.mode_config.min_width = 32;
 	apple->drm.mode_config.min_height = 32;
 
@@ -380,7 +381,6 @@ static int apple_platform_probe(struct platform_device *pdev)
 
 	drm_mode_config_reset(&apple->drm);
 
-	/* Remove early framebuffers (simplefb) */
 	ret = drm_aperture_remove_framebuffers(false, &apple_drm_driver);
 	if (ret)
 		return ret;

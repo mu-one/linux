@@ -1162,9 +1162,8 @@ static int dcp_platform_probe(struct platform_device *pdev)
 }
 
 /*
- * We need to shutdown DCP before tearing down the display subsystem. As Linux
- * shutdown clobbers video memory, failing to do so crashes the DCP, flashing
- * an annoying green screen of death.
+ * We need to shutdown DCP before tearing down the display subsystem. Otherwise
+ * the DCP will crash and briefly flash a green screen of death.
  */
 static void dcp_platform_shutdown(struct platform_device *pdev)
 {
