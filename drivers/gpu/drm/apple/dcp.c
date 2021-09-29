@@ -1007,17 +1007,10 @@ void dcp_flush(struct platform_device *pdev, struct drm_atomic_state *state)
 	/* These fields should be set together */
 	req->swap.swap_completed = req->swap.swap_enabled;
 
-	WARN_ON(!dcp->active);
-
 	if (drm_atomic_crtc_needs_modeset(crtc_state)) {
 		struct dcp_display_mode *mode;
 
 		mode = lookup_mode(dcp, &crtc_state->mode);
-
-		if (WARN(!mode, "cannot find mode")) {
-			do_swap(dcp, NULL, NULL);
-			return;
-		}
 
 		dcp->mode = (struct dcp_set_digital_out_mode_req) {
 			.dp_color_mode_id = mode->color_mode_id,
