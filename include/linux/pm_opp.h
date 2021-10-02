@@ -64,6 +64,7 @@ struct dev_pm_opp_icc_bw {
 struct dev_pm_opp_info {
 	unsigned long rate;
 	struct dev_pm_opp_supply *supplies;
+	struct dev_pm_opp *opp;
 };
 
 /**

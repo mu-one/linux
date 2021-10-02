@@ -859,6 +859,8 @@ static int _set_opp_custom(const struct opp_table *opp_table,
 	data->dev = dev;
 	data->old_opp.rate = old_opp->rate;
 	data->new_opp.rate = freq;
+	data->old_opp.opp = old_opp;
+	data->new_opp.opp = opp;
 
 	return opp_table->set_opp(data);
 }
@@ -873,12 +875,13 @@ static int _set_required_opp(struct device *dev, struct device *pd_dev,
 		return 0;
 
 	ret = dev_pm_genpd_set_performance_state(pd_dev, pstate);
-	if (ret) {
+	if (ret && ret != -ENODEV) {
 		dev_err(dev, "Failed to set performance rate of %s: %d (%d)\n",
 			dev_name(pd_dev), pstate, ret);
+		return ret;
 	}
 
-	return ret;
+	return 0;
 }
 
 /* This is only called for PM domain for now */
