@@ -211,7 +211,6 @@
 
 			reg = <0x2 0x3b700000 0x0 0x14000>;
 
-/*
 			ps_imx: power-controller@1b8 {
 				compatible = "apple,t8103-pmgr-pwrstate", "apple,pmgr-pwrstate";
 				reg = <0x1b8>;
@@ -220,7 +219,6 @@
 				apple,domain-name = "imx";
 				apple,always-on;
 			};
-*/
 
 			ps_sio: power-controller@1c0 {
 				compatible = "apple,t8103-pmgr-pwrstate", "apple,pmgr-pwrstate";
@@ -301,7 +299,6 @@
 				power-domains = <&ps_apcie_st>;
 			};
 
-/*
 			ps_apcie_st: power-controller@418 {
 				compatible = "apple,t8103-pmgr-pwrstate", "apple,pmgr-pwrstate";
 				reg = <0x418>;
@@ -310,7 +307,6 @@
 				apple,domain-name = "apcie_st";
 				power-domains = <&ps_apcie>;
 			};
-*/
 		};
 
 		spi3: spi@23510c000 {
