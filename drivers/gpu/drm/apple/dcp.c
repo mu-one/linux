@@ -1023,7 +1023,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 		do_swap(dcp, NULL, NULL);
 
 }
-EXPORT_SYMBOL_GPL(dcp_swap);
+EXPORT_SYMBOL_GPL(dcp_flush);
 
 bool dcp_is_initialized(struct platform_device *pdev)
 {
