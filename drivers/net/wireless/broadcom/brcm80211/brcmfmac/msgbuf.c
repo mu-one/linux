@@ -1363,11 +1363,25 @@ int brcmf_proto_msgbuf_rx_trigger(struct device *dev)
 {
 	struct brcmf_bus *bus_if = dev_get_drvdata(dev);
 	struct brcmf_pub *drvr = bus_if->drvr;
+	if (!drvr) {
+		dev_warn(dev, "ignoring driverless\n");
+		return 0;
+	}
+	if (!drvr->proto) {
+		dev_warn(dev, "ignoring protoless\n");
+		return 0;
+	}
+
 	struct brcmf_msgbuf *msgbuf = (struct brcmf_msgbuf *)drvr->proto->pd;
 	struct brcmf_commonring *commonring;
 	void *buf;
 	u32 flowid;
 	int qlen;
+
+	if (!msgbuf) {
+		dev_warn(dev, "ignoring early IRQ\n");
+		return 0;
+	}
 
 	buf = msgbuf->commonrings[BRCMF_D2H_MSGRING_RX_COMPLETE];
 	brcmf_msgbuf_process_rx(msgbuf, buf);
