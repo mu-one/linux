@@ -9,6 +9,7 @@
 #include <linux/device.h>
 #include <linux/firmware.h>
 #include <linux/module.h>
+#include <linux/of_net.h>
 #include <linux/bcm47xx_nvram.h>
 
 #include "debug.h"
@@ -366,13 +367,26 @@ static void brcmf_fw_add_defaults(struct nvram_parser *nvp)
 	nvp->nvram_len++;
 }
 
+static void brcmf_fw_set_macaddr(struct nvram_parser *nvp, u8 *mac)
+{
+	size_t len = strlen("macaddr=") + 17 + 1; /* 17 = "aa:bb:cc:dd:ee:ff" */
+
+	memmove(&nvp->nvram[len], &nvp->nvram[0], nvp->nvram_len);
+	nvp->nvram_len += len;
+	sprintf(&nvp->nvram[0], "macaddr=%02x:%02x:%02x:%02x:%02x:%02x",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
 /* brcmf_nvram_strip :Takes a buffer of "<var>=<value>\n" lines read from a fil
  * and ending in a NUL. Removes carriage returns, empty lines, comment lines,
  * and converts newlines to NULs. Shortens buffer as needed and pads with NULs.
  * End of buffer is completed with token identifying length of buffer.
+ *
+ * If mac is non-NULL, fix the MAC address pointed to by mac.
  */
 static void *brcmf_fw_nvram_strip(const u8 *data, size_t data_len,
-				  u32 *new_length, u16 domain_nr, u16 bus_nr)
+				  u32 *new_length, u16 domain_nr, u16 bus_nr,
+				  u8 *mac)
 {
 	struct nvram_parser nvp;
 	u32 pad;
@@ -402,8 +416,11 @@ static void *brcmf_fw_nvram_strip(const u8 *data, size_t data_len,
 
 	brcmf_fw_add_defaults(&nvp);
 
+	if (mac)
+		brcmf_fw_set_macaddr(&nvp, mac);
+
 	pad = nvp.nvram_len;
-	*new_length = roundup(nvp.nvram_len + 1, 4);
+	*new_length = roundup(nvp.nvram_len + 1, 8) + 4;
 	while (pad != *new_length) {
 		nvp.nvram[pad] = 0;
 		pad++;
@@ -517,12 +534,15 @@ static void brcmf_fw_free_request(struct brcmf_fw_request *req)
 static int brcmf_fw_request_nvram_done(const struct firmware *fw, void *ctx)
 {
 	struct brcmf_fw *fwctx = ctx;
+	struct device *dev = fwctx->dev;
 	struct brcmf_fw_item *cur;
 	bool free_bcm47xx_nvram = false;
 	bool kfree_nvram = false;
 	u32 nvram_length = 0;
 	void *nvram = NULL;
 	u8 *data = NULL;
+	u8 macaddr[6];
+	bool fixed_macaddr = false;
 	size_t data_len;
 
 	brcmf_dbg(TRACE, "enter: dev=%s\n", dev_name(fwctx->dev));
@@ -541,10 +561,18 @@ static int brcmf_fw_request_nvram_done(const struct firmware *fw, void *ctx)
 			goto fail;
 	}
 
+	/* Look up a fixed MAC address from the device tree if it exists */
+	if (dev->of_node) {
+		int ret = of_get_mac_address(dev->of_node, macaddr);
+
+		fixed_macaddr = (ret == 0);
+	}
+
 	if (data)
 		nvram = brcmf_fw_nvram_strip(data, data_len, &nvram_length,
 					     fwctx->req->domain_nr,
-					     fwctx->req->bus_nr);
+					     fwctx->req->bus_nr,
+					     fixed_macaddr ? macaddr : NULL);
 
 	if (free_bcm47xx_nvram)
 		bcm47xx_nvram_release_contents(data);
