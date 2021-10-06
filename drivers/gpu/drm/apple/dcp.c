@@ -89,8 +89,12 @@ struct apple_dcp {
 
 	bool active;
 
+	/* Modes valid for the connected display */
 	struct dcp_display_mode *modes;
 	unsigned int nr_modes;
+
+	/* Attributes of the connected display */
+	int width_mm, height_mm;
 };
 
 /*
@@ -514,45 +518,83 @@ static bool dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
-static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
+static void dcp_set_dimensions(struct apple_dcp *dcp)
+{
+	int i;
+
+	/* Set the connector info */
+	if (dcp->connector) {
+		struct drm_connector *connector = &dcp->connector->base;
+
+		mutex_lock(&connector->dev->mode_config.mutex);
+		connector->display_info.width_mm = dcp->width_mm;
+		connector->display_info.height_mm = dcp->height_mm;
+		mutex_unlock(&connector->dev->mode_config.mutex);
+	}
+
+	/*
+	 * Fix up any probed modes. Modes are created when parsing
+	 * TimingElements, dimensions are calculated when parsing
+	 * DisplayAttributes, and TimingElements may be sent first
+	 */
+	for (i = 0; i < dcp->nr_modes; ++i) {
+		dcp->modes[i].mode.width_mm = dcp->width_mm;
+		dcp->modes[i].mode.height_mm = dcp->height_mm;
+	}
+}
+
+static bool dcpep_process_chunks(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_set_dcpav_prop_end_req *req = in;
-	u8 *resp = out;
 	struct dcp_parse_ctx ctx;
 	int ret;
 
 	if (!dcp->chunks.data) {
 		dev_warn(dcp->dev, "ignoring spurious end\n");
-		*resp = false;
-		goto reset;
+		return false;
 	}
 
 	ret = parse(dcp->chunks.data, dcp->chunks.length, &ctx);
 
 	if (ret) {
 		dev_warn(dcp->dev, "bad header on dcpav props\n");
-		*resp = false;
-		goto reset;
+		return false;
 	}
 
 	if (!strcmp(req->key, "TimingElements")) {
 		struct dcp_display_mode *modes;
 
-		modes = enumerate_modes(&ctx, &dcp->nr_modes);
+		modes = enumerate_modes(&ctx, &dcp->nr_modes, dcp->width_mm,
+					dcp->height_mm);
 
 		if (IS_ERR(modes)) {
 			dev_warn(dcp->dev, "failed to parse modes\n");
 			dcp->nr_modes = 0;
-			*resp = false;
-			goto reset;
+			return false;
 		}
 
 		dcp->modes = modes;
+	} else if (!strcmp(req->key, "DisplayAttributes")) {
+		ret = parse_display_attributes(&ctx, &dcp->width_mm,
+					       &dcp->height_mm);
+
+		if (ret) {
+			dev_warn(dcp->dev, "failed to parse display attribs\n");
+			return false;
+		}
+
+		dcp_set_dimensions(dcp);
 	}
 
-	*resp = true;
+	return true;
+}
 
-reset:
+static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
+{
+	u8 *resp = out;
+
+	*resp = dcpep_process_chunks(dcp, out, in);
+
 	/* Reset for the next transfer */
 	devm_kfree(dcp->dev, dcp->chunks.data);
 	dcp->chunks.data = NULL;
@@ -1076,6 +1118,9 @@ void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc, struct appl
 
 	dcp->crtc = crtc;
 	dcp->connector = connector;
+
+	/* Dimensions might already be parsed */
+	dcp_set_dimensions(dcp);
 }
 
 static struct platform_device *dcp_get_dev(struct device *dev, const char *name)

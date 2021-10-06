@@ -302,7 +302,9 @@ static u32 calculate_clock(struct dimension *horiz, struct dimension *vert)
 	return DIV_ROUND_CLOSEST_ULL(clock >> 16, 1000);
 }
 
-static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *modes, unsigned int *count)
+static int parse_mode(struct dcp_parse_ctx *handle,
+		      struct dcp_display_mode *modes,
+		      unsigned int *count, int width_mm, int height_mm)
 {
 	int ret = 0;
 	struct iterator it;
@@ -359,10 +361,8 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *mod
 			     horiz.sync_width,
 		.htotal = horiz.total,
 
-		/* TODO: Set to
- 		 * DisplayAttributes.Max{Horizontal,Vertical}ImageSize * 10 */
-		.width_mm = 508,
-		.height_mm = 286,
+		.width_mm = width_mm,
+		.height_mm = height_mm,
 	};
 
 	drm_mode_set_name(mode);
@@ -375,7 +375,9 @@ static int parse_mode(struct dcp_parse_ctx *handle, struct dcp_display_mode *mod
 }
 
 struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
-					 unsigned int *count)
+					 unsigned int *count,
+					 int width_mm,
+					 int height_mm)
 {
 	struct iterator it;
 	int ret;
@@ -389,11 +391,45 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 		if (!modes)
 			return ERR_PTR(-ENOMEM);
 
-		ret = parse_mode(it.handle, modes, count);
+		ret = parse_mode(it.handle, modes, count, width_mm, height_mm);
 
 		if (ret)
 			return ERR_PTR(ret);
 	}
 
 	return modes;
+}
+
+int parse_display_attributes(struct dcp_parse_ctx *handle,
+			     int *width_mm, int *height_mm)
+{
+	int ret = 0;
+	struct iterator it;
+	s64 width_cm = 0, height_cm = 0;
+
+	dcp_parse_foreach_in_dict(handle, it) {
+		char *key = parse_string(it.handle);
+
+		if (IS_ERR(key))
+			ret = PTR_ERR(key);
+		else if (!strcmp(key, "MaxHorizontalImageSize"))
+			ret = parse_int(it.handle, &width_cm);
+		else if (!strcmp(key, "MaxVerticalImageSize"))
+			ret = parse_int(it.handle, &height_cm);
+		else
+			skip(it.handle);
+
+		if (ret)
+			return ret;
+	}
+
+	/* Check semantics (don't feed the DRM core garbage) */
+	if (width_cm <= 0 || height_cm <= 0)
+		return -EINVAL;
+
+	/* 1cm = 10mm */
+	*width_mm = 10 * width_cm;
+	*height_mm = 10 * height_cm;
+
+	return 0;
 }
