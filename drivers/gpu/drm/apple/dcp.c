@@ -654,6 +654,11 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 
 #define DCPEP_MAX_CB (1000)
 
+/*
+ * Define type-safe trampolines. Define typedefs to enforce type-safety on the
+ * input data (so if the types don't match, gcc errors out).
+ */
+
 #define TRAMPOLINE_VOID(name) \
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
@@ -663,21 +668,28 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 	}
 
 #define TRAMPOLINE_IN(name, T_in) \
+	typedef void (*callback_ ## name)(struct apple_dcp *, T_in *); \
+	\
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
 	{ \
+		callback_ ## name cb = dcpep_cb_ ## name; \
+		\
 		dev_dbg(dcp->dev, "received callback %s\n", #name); \
-		dcpep_cb_ ## name(dcp, in); \
+		cb(dcp, in); \
 	}
 
 #define TRAMPOLINE_INOUT(name, T_in, T_out) \
+	typedef T_out (*callback_ ## name)(struct apple_dcp *, T_in *); \
+	\
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
 	{ \
 		T_out *typed_out = out; \
+		callback_ ## name cb = dcpep_cb_ ## name; \
 		\
 		dev_dbg(dcp->dev, "received callback %s\n", #name); \
-		*typed_out = dcpep_cb_ ## name(dcp, in); \
+		*typed_out = cb(dcp, in); \
 	}
 
 #define TRAMPOLINE_OUT(name, T_out) \
