@@ -410,7 +410,7 @@ static void dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 	/* Padding for alignment could affect bounds checking, so pad first */
 	resp->dva_size = ALIGN(req->size, 4096);
 
-	if (!is_disp_register(dcp, req->paddr, req->paddr + resp->dva_size)) {
+	if (!is_disp_register(dcp, req->paddr, req->paddr + resp->dva_size - 1)) {
 		dev_err(dcp->dev, "refusing to map phys address %llx size %llx",
 			req->paddr, req->size);
 		return;
@@ -418,8 +418,8 @@ static void dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 
 	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size,
 				     DMA_BIDIRECTIONAL, 0);
-	resp->mem_desc_id = ++dcp->nr_mappings;
 
+	resp->mem_desc_id = ++dcp->nr_mappings;
 	WARN_ON(resp->mem_desc_id == 0);
 }
 
@@ -1114,10 +1114,10 @@ static struct platform_device *dcp_get_dev(struct device *dev, const char *name)
 static int dcp_get_disp_regs(struct apple_dcp *dcp)
 {
 	struct platform_device *pdev = to_platform_device(dcp->dev);
-	int count = pdev->num_resources;
+	int count = pdev->num_resources - 1;
 	int i;
 
-	if (count <= 1 || count > (1 + MAX_DISP_REGISTERS))
+	if (count <= 0 || count > MAX_DISP_REGISTERS)
 		return -EINVAL;
 
 	for (i = 0; i < count; ++i) {
@@ -1125,6 +1125,7 @@ static int dcp_get_disp_regs(struct apple_dcp *dcp)
 			platform_get_resource(pdev, IORESOURCE_MEM, 1 + i);
 	}
 
+	dcp->nr_disp_registers = count;
 	return 0;
 }
 
