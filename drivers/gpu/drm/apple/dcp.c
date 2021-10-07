@@ -545,18 +545,15 @@ static bool dcpep_process_chunks(struct apple_dcp *dcp, void *out, void *in)
 	}
 
 	if (!strcmp(req->key, "TimingElements")) {
-		struct dcp_display_mode *modes;
-
-		modes = enumerate_modes(&ctx, &dcp->nr_modes, dcp->width_mm,
-					dcp->height_mm);
+		dcp->modes = enumerate_modes(&ctx, &dcp->nr_modes,
+					     dcp->width_mm, dcp->height_mm);
 
 		if (IS_ERR(modes)) {
 			dev_warn(dcp->dev, "failed to parse modes\n");
+			dcp->modes = NULL;
 			dcp->nr_modes = 0;
 			return false;
 		}
-
-		dcp->modes = modes;
 	} else if (!strcmp(req->key, "DisplayAttributes")) {
 		ret = parse_display_attributes(&ctx, &dcp->width_mm,
 					       &dcp->height_mm);
