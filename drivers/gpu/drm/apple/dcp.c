@@ -709,7 +709,7 @@ TRAMPOLINE_OUT(get_frequency, u64);
 TRAMPOLINE_OUT(get_time, u64);
 TRAMPOLINE_IN(hotplug, u64);
 
-void (*dcpep_cb_handlers[DCPEP_MAX_CB])(struct apple_dcp *, void *, void *) = {
+void (*const dcpep_cb_handlers[DCPEP_MAX_CB])(struct apple_dcp *, void *, void *) = {
 	[0] = trampoline_true,
 	[1] = trampoline_true,
 	[2] = trampoline_nop,
