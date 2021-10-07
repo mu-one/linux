@@ -548,7 +548,7 @@ static bool dcpep_process_chunks(struct apple_dcp *dcp, void *out, void *in)
 		dcp->modes = enumerate_modes(&ctx, &dcp->nr_modes,
 					     dcp->width_mm, dcp->height_mm);
 
-		if (IS_ERR(modes)) {
+		if (IS_ERR(dcp->modes)) {
 			dev_warn(dcp->dev, "failed to parse modes\n");
 			dcp->modes = NULL;
 			dcp->nr_modes = 0;
@@ -626,28 +626,21 @@ static void dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
 	dcp->skip_ack = true;
 }
 
-static void dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *in)
+static struct dcp_rt_bandwidth dcpep_cb_rt_bandwidth(struct apple_dcp *dcp)
 {
-	struct dcp_rt_bandwidth *data = out;
-
-	*data = (struct dcp_rt_bandwidth) {
+	return (struct dcp_rt_bandwidth) {
 		.reg_scratch = dcp->disp_registers[5]->start + REG_SCRATCH,
 		.reg_doorbell = dcp->disp_registers[6]->start + REG_DOORBELL,
 		.doorbell_bit = REG_DOORBELL_BIT,
 
 		.padding[3] = 0x4, // XXX: required by 11.x firmware
 	};
-
-	BUILD_BUG_ON(sizeof(*data) != 0x3C);
 }
 
 /* Callback to get the current time as milliseconds since the UNIX epoch */
-static void dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
+static u64 dcpep_cb_get_time(struct apple_dcp *dcp)
 {
-	u64 *ms = out;
-	ktime_t time = ktime_get_real();
-
-	*ms = ktime_to_ms(time);
+	return ktime_to_ms(ktime_get_real());
 }
 
 /*
@@ -690,11 +683,23 @@ struct dcpep_cb {
 	void (*cb)(struct apple_dcp *dcp, void *out, void *in);
 };
 
+#define TRAMPOLINE_OUT(name, T_out) \
+	static void trampoline_ ## name(struct apple_dcp *dcp, \
+					void *out, void *in) \
+	{ \
+		T_out *typed_out = out; \
+		\
+		*typed_out = dcpep_cb_ ## name(dcp); \
+	}
+
+TRAMPOLINE_OUT(rt_bandwidth, struct dcp_rt_bandwidth);
+TRAMPOLINE_OUT(get_time, u64);
+
 struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[0] = {"did_boot_signal", dcpep_cb_true },
 	[1] = {"did_power_on_signal", dcpep_cb_true },
 	[2] = {"will_power_off_signal", dcpep_cb_nop },
-	[3] = {"rt_bandwidth_setup_ap", dcpep_cb_rt_bandwidth_setup },
+	[3] = {"rt_bandwidth_setup_ap", trampoline_rt_bandwidth },
 
 	[100] = {"match_pmu_service", dcpep_cb_nop },
 	[101] = {"get_display_default_stride", dcpep_cb_zero },
@@ -714,7 +719,7 @@ struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
 	[201] = {"map_piodma", dcpep_cb_map_piodma },
 	[206] = {"match_pmu_service_2", dcpep_cb_true },
 	[207] = {"match_backlight_service", dcpep_cb_true },
-	[208] = {"get_calendar_time_ms", dcpep_cb_get_time },
+	[208] = {"get_calendar_time_ms", trampoline_get_time },
 
 	[300] = {"pr_publish", dcpep_cb_nop },
 
@@ -1134,6 +1139,7 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dma_addr_t shmem_iova;
 	int ret;
 
+	BUILD_BUG_ON(sizeof(struct dcp_rt_bandwidth) != 0x3C);
 	BUILD_BUG_ON(sizeof(struct dcp_rect) != 0x10);
 	BUILD_BUG_ON(sizeof(struct dcp_iouserclient) != 0x10);
 	BUILD_BUG_ON(sizeof(struct dcp_swap) != 0x274);
