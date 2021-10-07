@@ -95,6 +95,9 @@ struct apple_dcp {
 
 	/* Attributes of the connected display */
 	int width_mm, height_mm;
+
+	/* Don't ack the request we're currently processing. TODO: move to cb_channel */
+	bool skip_ack;
 };
 
 /*
@@ -269,26 +272,36 @@ void dcp_ack(struct apple_dcp *dcp, enum dcp_context_id context)
 }
 
 /* DCP callback handlers */
-static bool dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_nop(struct apple_dcp *dcp, void *out, void *in)
 {
-	return true;
+	/* No operation */
 }
 
-static bool dcpep_cb_swap_complete(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_true(struct apple_dcp *dcp, void *out, void *in)
+{
+	u8 *resp = out;
+
+	*resp = true;
+}
+
+static void dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
+{
+	u8 *resp = out;
+
+	*resp = false;
+}
+
+static void dcpep_cb_swap_complete(struct apple_dcp *dcp, void *out, void *in)
 {
 	apple_crtc_vblank(dcp->crtc);
-	return true;
 }
 
-static bool dcpep_cb_zero(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_zero(struct apple_dcp *dcp, void *out, void *in)
 {
-	u32 *resp = out;
-
-	*resp = 0;
-	return true;
+	memset(out, 0, sizeof(u32));
 }
 
-static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_get_uint_prop_resp *resp = out;
 
@@ -296,7 +309,6 @@ static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
 
 	resp->value = 0;
 	resp->ret = 0;
-	return true;
 }
 
 /*
@@ -308,7 +320,7 @@ static bool dcpep_cb_get_uint_prop(struct apple_dcp *dcp, void *out, void *in)
  * is a "fundamentally unsafe" operation according to the docs. And yet
  * everyone does it...
  */
-static bool dcpep_cb_map_piodma(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_map_piodma(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_map_buf_resp *resp = out;
 	struct dcp_map_buf_req *req = in;
@@ -329,18 +341,16 @@ static bool dcpep_cb_map_piodma(struct apple_dcp *dcp, void *out, void *in)
 	resp->ret = dma_map_sgtable(&dcp->piodma->dev, map, DMA_BIDIRECTIONAL, 0);
 
 	if (resp->ret)
-		dev_warn(dcp->dev, "failed to map for piodma %d\n", resp->ret);
-	else
-		resp->dva = sg_dma_address(map->sgl);
+		goto reject;
 
+	resp->dva = sg_dma_address(map->sgl);
 	resp->ret = 0;
-	return true;
+	return;
 
 reject:
 	dev_err(dcp->dev, "denying map of invalid buffer %llx for pidoma\n",
 		req->buffer);
 	resp->ret = EINVAL;
-	return true;
 }
 
 /*
@@ -348,7 +358,7 @@ reject:
  * physically contigiuous, however we should save the sgtable in case the
  * buffer needs to be later mapped for PIODMA.
  */
-static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_allocate_buffer_resp *resp = out;
 	struct dcp_allocate_buffer_req *req = in;
@@ -359,7 +369,7 @@ static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 
 	if (resp->mem_desc_id >= ARRAY_SIZE(dcp->mappings)) {
 		dev_warn(dcp->dev, "DCP overflowed mapping table, ignoring");
-		return true;
+		return;
 	}
 
 	buf = dma_alloc_coherent(dcp->dev, resp->dva_size, &resp->dva,
@@ -369,7 +379,6 @@ static bool dcpep_cb_allocate_buffer(struct apple_dcp *dcp, void *out, void *in)
 			resp->dva, resp->dva_size);
 
 	WARN_ON(resp->mem_desc_id == 0);
-	return true;
 }
 
 /* Validate that the specified region is a display register */
@@ -388,13 +397,12 @@ static bool is_disp_register(struct apple_dcp *dcp, u64 start, u64 end)
 }
 
 /*
- * Map an arbitrary chunk of physical memory into the DCP's address space. As
- * stated that's a massive security hole. In practice, benevolent DCP firmware
- * only uses this to map the display registers we advertise in
- * sr_map_device_memory_with_index. As long as we bounds check against this
- * register memory, the routine is safe against malicious coprocessors.
+ * Map contiguous physical memory into the DCP's address space. The firmware
+ * uses this to map the display registers we advertise in
+ * sr_map_device_memory_with_index, so we bounds check against that to guard
+ * safe against malicious coprocessors.
  */
-static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_map_physical_resp *resp = out;
 	struct dcp_map_physical_req *req = in;
@@ -405,7 +413,7 @@ static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 	if (!is_disp_register(dcp, req->paddr, req->paddr + resp->dva_size)) {
 		dev_err(dcp->dev, "refusing to map phys address %llx size %llx",
 			req->paddr, req->size);
-		return true;
+		return;
 	}
 
 	resp->dva = dma_map_resource(dcp->dev, req->paddr, resp->dva_size,
@@ -413,22 +421,19 @@ static bool dcpep_cb_map_physical(struct apple_dcp *dcp, void *out, void *in)
 	resp->mem_desc_id = ++dcp->nr_mappings;
 
 	WARN_ON(resp->mem_desc_id == 0);
-
-	return true;
 }
 
 /* Pixel clock frequency in Hz, a bit more than 4K@60 VGA clock 533.250 MHz */
 #define DCP_PIXEL_CLOCK (533333328)
 
-static bool dcpep_cb_get_frequency(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_get_frequency(struct apple_dcp *dcp, void *out, void *in)
 {
 	u64 *frequency = out;
 
 	*frequency = DCP_PIXEL_CLOCK;
-	return true;
 }
 
-static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_map_reg_resp *resp = out;
 	struct dcp_map_reg_req *req = in;
@@ -448,29 +453,10 @@ static bool dcpep_cb_map_reg(struct apple_dcp *dcp, void *out, void *in)
 			.length = resource_size(rsrc)
 		};
 	}
-
-	return true;
-}
-
-/* A number of callbacks of the form `bool cb()` can be tied to a constant. */
-static bool dcpep_cb_true(struct apple_dcp *dcp, void *out, void *in)
-{
-	u8 *resp = out;
-
-	*resp = true;
-	return true;
-}
-
-static bool dcpep_cb_false(struct apple_dcp *dcp, void *out, void *in)
-{
-	u8 *resp = out;
-
-	*resp = false;
-	return true;
 }
 
 /* Chunked data transfer for property dictionaries */
-static bool dcpep_cb_prop_start(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_prop_start(struct apple_dcp *dcp, void *out, void *in)
 {
 	u32 *length = in;
 	u8 *resp = out;
@@ -479,7 +465,7 @@ static bool dcpep_cb_prop_start(struct apple_dcp *dcp, void *out, void *in)
 
 	if (dcp->chunks.data != NULL) {
 		dev_warn(dcp->dev, "ignoring spurious transfer start\n");
-		return true;
+		return;
 	}
 
 	dcp->chunks.length = *length;
@@ -489,14 +475,13 @@ static bool dcpep_cb_prop_start(struct apple_dcp *dcp, void *out, void *in)
 		dcp->chunks.length = 0;
 
 		dev_warn(dcp->dev, "failed to allocate chunks\n");
-		return true;
+		return;
 	}
 
 	*resp = true;
-	return true;
 }
 
-static bool dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_set_dcpav_prop_chunk_req *req = in;
 	u8 *resp = out;
@@ -504,18 +489,16 @@ static bool dcpep_cb_prop_chunk(struct apple_dcp *dcp, void *out, void *in)
 
 	if (!dcp->chunks.data) {
 		dev_warn(dcp->dev, "ignoring spurious chunk\n");
-		return true;
+		return;
 	}
 
 	if (req->offset + req->length > dcp->chunks.length) {
 		dev_warn(dcp->dev, "ignoring overflowing chunk\n");
-		return true;
+		return;
 	}
 
 	memcpy(dcp->chunks.data + req->offset, req->data, req->length);
-
 	*resp = true;
-	return true;
 }
 
 static void dcp_set_dimensions(struct apple_dcp *dcp)
@@ -589,7 +572,7 @@ static bool dcpep_process_chunks(struct apple_dcp *dcp, void *out, void *in)
 	return true;
 }
 
-static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 {
 	u8 *resp = out;
 
@@ -599,8 +582,6 @@ static bool dcpep_cb_prop_end(struct apple_dcp *dcp, void *out, void *in)
 	devm_kfree(dcp->dev, dcp->chunks.data);
 	dcp->chunks.data = NULL;
 	dcp->chunks.length = 0;
-
-	return true;
 }
 
 /* Boot sequence */
@@ -642,13 +623,13 @@ static void boot_1_5(struct apple_dcp *dcp, void *out, void *cookie)
 	dcp_push(dcp, false, dcp_create_default_fb, 0, sizeof(u32), NULL, boot_2, NULL);
 }
 
-static bool dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_boot_1(struct apple_dcp *dcp, void *out, void *in)
 {
 	dcp_push(dcp, false, dcp_set_create_dfb, 0, 0, NULL, boot_1_5, NULL);
-	return false;
+	dcp->skip_ack = true;
 }
 
-static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct dcp_rt_bandwidth *data = out;
 
@@ -661,17 +642,15 @@ static bool dcpep_cb_rt_bandwidth_setup(struct apple_dcp *dcp, void *out, void *
 	};
 
 	BUILD_BUG_ON(sizeof(*data) != 0x3C);
-	return true;
 }
 
 /* Callback to get the current time as milliseconds since the UNIX epoch */
-static bool dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_get_time(struct apple_dcp *dcp, void *out, void *in)
 {
 	u64 *ms = out;
 	ktime_t time = ktime_get_real();
 
 	*ms = ktime_to_ms(time);
-	return true;
 }
 
 /*
@@ -696,7 +675,7 @@ void dcp_hotplug(struct work_struct *work)
 		drm_kms_helper_hotplug_event(dev);
 }
 
-static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
+static void dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 {
 	struct apple_connector *connector = dcp->connector;
 	u64 *connected = in;
@@ -704,8 +683,6 @@ static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 	connector->connected = !!(*connected);
 
 	schedule_work(&connector->hotplug_wq);
-
-	return true;
 }
 
 #define DCPEP_MAX_CB (1000)
@@ -713,7 +690,7 @@ static bool dcpep_cb_hotplug(struct apple_dcp *dcp, void *out, void *in)
 /* Represents a single callback. Name is for debug only. */
 struct dcpep_cb {
 	const char *name;
-	bool (*cb)(struct apple_dcp *dcp, void *out, void *in);
+	void (*cb)(struct apple_dcp *dcp, void *out, void *in);
 };
 
 struct dcpep_cb dcpep_cb_handlers[DCPEP_MAX_CB] = {
@@ -775,7 +752,6 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	struct dcp_packet_header *hdr = data;
 	void *in, *out;
 	int tag = dcp_parse_tag(hdr->tag);
-	bool ack = true;
 	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 	u8 depth;
 
@@ -800,11 +776,13 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	dev_dbg(dev, "channel %u: received callback %s\n", context, cb->name);
 
 	ch->output[depth] = out;
-	ack = cb->cb(dcp, out, in);
+	cb->cb(dcp, out, in);
 
 ack:
-	if (ack)
+	if (!dcp->skip_ack)
 		dcp_ack(dcp, context);
+
+	dcp->skip_ack = false;
 }
 
 static void dcpep_handle_ack(struct apple_dcp *dcp, enum dcp_context_id context,
