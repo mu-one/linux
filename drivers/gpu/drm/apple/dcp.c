@@ -185,7 +185,7 @@ static u8 dcp_pop_depth(u8 *depth)
 #define DCP_METHOD(name, tag) \
 	[dcp_ ## name ] = { #name, "A" # tag }
 
-struct dcp_method_entry dcp_methods[dcp_num_methods] = {
+const struct dcp_method_entry dcp_methods[dcp_num_methods] = {
 	DCP_METHOD(late_init_signal, 000),
 	DCP_METHOD(setup_video_limits, 029),
 	DCP_METHOD(set_create_dfb, 357),
