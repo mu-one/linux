@@ -683,6 +683,29 @@ struct dcpep_cb {
 	void (*cb)(struct apple_dcp *dcp, void *out, void *in);
 };
 
+#define TRAMPOLINE_VOID(name) \
+	static void trampoline_ ## name(struct apple_dcp *dcp, \
+					void *out, void *in) \
+	{ \
+		dcpep_cb_ ## name(dcp); \
+	}
+
+#define TRAMPOLINE_IN(name, T_in, T_out) \
+	static void trampoline_ ## name(struct apple_dcp *dcp, \
+					void *out, void *in) \
+	{ \
+		dcpep_cb_ ## name(dcp, in); \
+	}
+
+#define TRAMPOLINE_INOUT(name, T_in, T_out) \
+	static void trampoline_ ## name(struct apple_dcp *dcp, \
+					void *out, void *in) \
+	{ \
+		T_out *typed_out = out; \
+		\
+		*typed_out = dcpep_cb_ ## name(dcp, in); \
+	}
+
 #define TRAMPOLINE_OUT(name, T_out) \
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
