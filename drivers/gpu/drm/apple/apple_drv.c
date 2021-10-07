@@ -21,6 +21,7 @@
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_modeset_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
@@ -229,10 +230,6 @@ static const struct drm_crtc_funcs apple_crtc_funcs = {
 	.disable_vblank		= apple_disable_vblank,
 };
 
-static const struct drm_encoder_funcs apple_encoder_funcs = {
-	.destroy		= drm_encoder_cleanup,
-};
-
 static const struct drm_mode_config_funcs apple_mode_config_funcs = {
 	.atomic_check		= drm_atomic_helper_check,
 	.atomic_commit		= drm_atomic_helper_commit,
@@ -289,8 +286,7 @@ static int apple_probe_per_dcp(struct device *dev,
 
 	encoder = devm_kzalloc(dev, sizeof(*encoder), GFP_KERNEL);
 	encoder->possible_crtcs = drm_crtc_mask(&crtc->base);
-	ret = drm_encoder_init(drm, encoder, &apple_encoder_funcs,
-			       DRM_MODE_ENCODER_TMDS /* XXX */, "apple_hdmi");
+	ret = drm_simple_encoder_init(drm, encoder, DRM_MODE_ENCODER_TMDS);
 	if (ret)
 		return ret;
 
