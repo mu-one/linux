@@ -32,9 +32,6 @@
 
 #define DRIVER_NAME     "apple"
 #define DRIVER_DESC     "Apple display controller DRM driver"
-#define DRIVER_DATE     "20210901"
-#define DRIVER_MAJOR    1
-#define DRIVER_MINOR    0
 
 #define FRAC_16_16(mult, div)    (((mult) << 16) / (div))
 
@@ -51,9 +48,9 @@ static const struct drm_driver apple_drm_driver = {
 	DRM_GEM_CMA_DRIVER_OPS,
 	.name			= DRIVER_NAME,
 	.desc			= DRIVER_DESC,
-	.date			= DRIVER_DATE,
-	.major			= DRIVER_MAJOR,
-	.minor			= DRIVER_MINOR,
+	.date			= "20210901",
+	.major			= 1,
+	.minor			= 0,
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
 	.fops			= &apple_fops,
 };
