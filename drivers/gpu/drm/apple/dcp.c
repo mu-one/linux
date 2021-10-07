@@ -654,16 +654,14 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 
 #define DCPEP_MAX_CB (1000)
 
-/* Represents a single callback. Name is for debug only. */
-struct dcpep_trampoline {
-	const char *name;
-	void (*cb)(struct apple_dcp *dcp, void *out, void *in);
-};
+/* Represents a single callback. */
+typedef void (*dcpep_trampoline)(struct apple_dcp *dcp, void *out, void *in);
 
 #define TRAMPOLINE_VOID(name) \
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
 	{ \
+		dev_dbg(dcp->dev, "received callback %s\n", #name); \
 		dcpep_cb_ ## name(dcp); \
 	}
 
@@ -671,6 +669,7 @@ struct dcpep_trampoline {
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
 	{ \
+		dev_dbg(dcp->dev, "received callback %s\n", #name); \
 		dcpep_cb_ ## name(dcp, in); \
 	}
 
@@ -680,6 +679,7 @@ struct dcpep_trampoline {
 	{ \
 		T_out *typed_out = out; \
 		\
+		dev_dbg(dcp->dev, "received callback %s\n", #name); \
 		*typed_out = dcpep_cb_ ## name(dcp, in); \
 	}
 
@@ -689,6 +689,7 @@ struct dcpep_trampoline {
 	{ \
 		T_out *typed_out = out; \
 		\
+		dev_dbg(dcp->dev, "received callback %s\n", #name); \
 		*typed_out = dcpep_cb_ ## name(dcp); \
 	}
 
@@ -711,62 +712,56 @@ TRAMPOLINE_OUT(get_frequency, u64);
 TRAMPOLINE_OUT(get_time, u64);
 TRAMPOLINE_IN(hotplug, u64);
 
-struct dcpep_trampoline dcpep_cb_handlers[DCPEP_MAX_CB] = {
-	[0] = {"did_boot_signal", trampoline_true },
-	[1] = {"did_power_on_signal", trampoline_true },
-	[2] = {"will_power_off_signal", trampoline_nop },
-	[3] = {"rt_bandwidth_setup_ap", trampoline_rt_bandwidth },
-
-	[100] = {"match_pmu_service", trampoline_nop },
-	[101] = {"get_display_default_stride", trampoline_zero },
-	[103] = {"set_boolean_property", trampoline_nop },
-	[106] = {"remove_property", trampoline_nop },
-	[107] = {"create_provider_service", trampoline_true },
-	[108] = {"create_product_service", trampoline_true },
-	[109] = {"create_pmu_service", trampoline_true },
-	[110] = {"create_iomfb_service", trampoline_true },
-	[111] = {"create_backlight_service", trampoline_false },
-	[121] = {"set_dcpav_prop_start", trampoline_prop_start },
-	[122] = {"set_dcpav_prop_chunk", trampoline_prop_chunk },
-	[123] = {"set_dcpav_prop_end", trampoline_prop_end },
-	[116] = {"start_hardware_boot", trampoline_boot_1 },
-	[119] = {"read_edt_data", trampoline_false },
-
-	[201] = {"map_piodma", trampoline_map_piodma },
-	[206] = {"match_pmu_service_2", trampoline_true },
-	[207] = {"match_backlight_service", trampoline_true },
-	[208] = {"get_calendar_time_ms", trampoline_get_time },
-
-	[300] = {"pr_publish", trampoline_nop },
-
-	[401] = {"sr_get_uint_prop", trampoline_get_uint_prop },
-	[408] = {"sr_get_clock_frequency", trampoline_get_frequency },
-	[411] = {"sr_map_device_memory_with_index", trampoline_map_reg },
-	[413] = {"sr_set_property_dict", trampoline_true },
-	[414] = {"sr_set_property_int", trampoline_true },
-	[415] = {"sr_set_property_bool", trampoline_true },
-
-	[451] = {"allocate_buffer", trampoline_allocate_buffer },
-	[452] = {"map_physical", trampoline_map_physical },
-
-	[552] = {"set_property_dict_0", trampoline_true },
-	[561] = {"set_property_dict", trampoline_true },
-	[563] = {"set_property_int", trampoline_true },
-	[565] = {"set_property_bool", trampoline_true },
-	[567] = {"set_property_str", trampoline_true },
-	[574] = {"power_up_dart", trampoline_zero },
-	[576] = {"hotplug_notify_gated", trampoline_hotplug },
-	[577] = {"powerstate_notify", trampoline_nop },
-	[589] = {"swap_complete_ap_gated", trampoline_swap_complete },
-	[591] = {"swap_complete_intent_gated", trampoline_nop },
-	[598] = {"find_swap_function_gated", trampoline_nop },
+dcpep_trampoline dcpep_cb_handlers[DCPEP_MAX_CB] = {
+	[0] = trampoline_true,
+	[1] = trampoline_true,
+	[2] = trampoline_nop,
+	[3] = trampoline_rt_bandwidth,
+	[100] = trampoline_nop,
+	[101] = trampoline_zero,
+	[103] = trampoline_nop,
+	[106] = trampoline_nop,
+	[107] = trampoline_true,
+	[108] = trampoline_true,
+	[109] = trampoline_true,
+	[110] = trampoline_true,
+	[111] = trampoline_false,
+	[121] = trampoline_prop_start,
+	[122] = trampoline_prop_chunk,
+	[123] = trampoline_prop_end,
+	[116] = trampoline_boot_1,
+	[119] = trampoline_false,
+	[201] = trampoline_map_piodma,
+	[206] = trampoline_true,
+	[207] = trampoline_true,
+	[208] = trampoline_get_time,
+	[300] = trampoline_nop,
+	[401] = trampoline_get_uint_prop,
+	[408] = trampoline_get_frequency,
+	[411] = trampoline_map_reg,
+	[413] = trampoline_true,
+	[414] = trampoline_true,
+	[415] = trampoline_true,
+	[451] = trampoline_allocate_buffer,
+	[452] = trampoline_map_physical,
+	[552] = trampoline_true,
+	[561] = trampoline_true,
+	[563] = trampoline_true,
+	[565] = trampoline_true,
+	[567] = trampoline_true,
+	[574] = trampoline_zero,
+	[576] = trampoline_hotplug,
+	[577] = trampoline_nop,
+	[589] = trampoline_swap_complete,
+	[591] = trampoline_nop,
+	[598] = trampoline_nop,
 };
 
 static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 			    void *data, u32 length)
 {
 	struct device *dev = dcp->dev;
-	struct dcpep_trampoline *cb;
+	dcpep_trampoline cb;
 	struct dcp_packet_header *hdr = data;
 	void *in, *out;
 	int tag = dcp_parse_tag(hdr->tag);
@@ -779,10 +774,10 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 		goto ack;
 	}
 
-	cb = &dcpep_cb_handlers[tag];
+	cb = dcpep_cb_handlers[tag];
 	depth = dcp_push_depth(&ch->depth);
 
-	if (!cb->cb) {
+	if (!cb) {
 		dev_warn(dev, "received unknown callback %c%c%c%c\n",
 			 hdr->tag[3], hdr->tag[2], hdr->tag[1], hdr->tag[0]);
 		goto ack;
@@ -791,10 +786,8 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	in = data + sizeof(*hdr);
 	out = in + hdr->in_len;
 
-	dev_dbg(dev, "channel %u: received callback %s\n", context, cb->name);
-
 	ch->output[depth] = out;
-	cb->cb(dcp, out, in);
+	cb(dcp, out, in);
 
 ack:
 	if (!dcp->skip_ack)
