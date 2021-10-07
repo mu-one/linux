@@ -654,9 +654,6 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 
 #define DCPEP_MAX_CB (1000)
 
-/* Represents a single callback. */
-typedef void (*dcpep_trampoline)(struct apple_dcp *dcp, void *out, void *in);
-
 #define TRAMPOLINE_VOID(name) \
 	static void trampoline_ ## name(struct apple_dcp *dcp, \
 					void *out, void *in) \
@@ -712,7 +709,7 @@ TRAMPOLINE_OUT(get_frequency, u64);
 TRAMPOLINE_OUT(get_time, u64);
 TRAMPOLINE_IN(hotplug, u64);
 
-dcpep_trampoline dcpep_cb_handlers[DCPEP_MAX_CB] = {
+void (*dcpep_cb_handlers[DCPEP_MAX_CB])(struct apple_dcp *, void *, void *) = {
 	[0] = trampoline_true,
 	[1] = trampoline_true,
 	[2] = trampoline_nop,
@@ -761,7 +758,6 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 			    void *data, u32 length)
 {
 	struct device *dev = dcp->dev;
-	dcpep_trampoline cb;
 	struct dcp_packet_header *hdr = data;
 	void *in, *out;
 	int tag = dcp_parse_tag(hdr->tag);
@@ -774,10 +770,9 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 		goto ack;
 	}
 
-	cb = dcpep_cb_handlers[tag];
 	depth = dcp_push_depth(&ch->depth);
 
-	if (!cb) {
+	if (!dcpep_cb_handlers[tag]) {
 		dev_warn(dev, "received unknown callback %c%c%c%c\n",
 			 hdr->tag[3], hdr->tag[2], hdr->tag[1], hdr->tag[0]);
 		goto ack;
@@ -787,7 +782,7 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	out = in + hdr->in_len;
 
 	ch->output[depth] = out;
-	cb(dcp, out, in);
+	dcpep_cb_handlers[tag](dcp, out, in);
 
 ack:
 	if (!dcp->skip_ack)
