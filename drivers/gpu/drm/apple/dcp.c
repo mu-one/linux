@@ -963,7 +963,7 @@ int dcp_get_modes(struct drm_connector *connector)
 		mode = drm_mode_duplicate(dev, &dcp->modes[i].mode);
 
 		if (!mode) {
-			dev_err(dev->dev, "Failed to create a new display mode\n");
+			dev_err(dev->dev, "Failed to duplicate display mode\n");
 			return 0;
 		}
 
@@ -1027,10 +1027,9 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 	struct drm_plane_state *new_state, *old_state;
 	struct drm_crtc_state *crtc_state;
 	struct dcp_swap_submit_req *req = &dcp->swap;
-
 	int l;
 
-	crtc_state = drm_atomic_get_new_crtc_state(state, (struct drm_crtc *) dcp->crtc);
+	crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
 
 	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel")) {
 		apple_crtc_vblank(dcp->crtc);
