@@ -1007,16 +1007,9 @@ static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
 	dcp_swap_start(dcp, false, &start_req, dcp_swap_started, NULL);
 }
 
-static void dcp_modeset_2(struct apple_dcp *dcp, void *out, void *cookie)
+static void dcp_modeset(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	dcp_set_digital_out_mode(dcp, false, &dcp->mode, do_swap, NULL);
-}
-
-static void dcp_modeset_and_swap(struct apple_dcp *dcp)
-{
-	u32 handle = 2;
-
-	dcp_set_display_device(dcp, false, &handle, dcp_modeset_2, NULL);
 }
 
 void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
@@ -1098,6 +1091,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 
 	if (drm_atomic_crtc_needs_modeset(crtc_state)) {
 		struct dcp_display_mode *mode;
+		u32 handle = 2;
 
 		mode = lookup_mode(dcp, &crtc_state->mode);
 
@@ -1106,7 +1100,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 			.dp_timing_mode_id = mode->timing_mode_id
 		};
 
-		dcp_modeset_and_swap(dcp);
+		dcp_set_display_device(dcp, false, &handle, dcp_modeset, NULL);
 	} else
 		do_swap(dcp, NULL, NULL);
 
