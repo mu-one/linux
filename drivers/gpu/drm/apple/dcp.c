@@ -711,67 +711,72 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
  * input data (so if the types don't match, gcc errors out).
  */
 
-#define TRAMPOLINE_VOID(name) \
-	static void trampoline_ ## name(struct apple_dcp *dcp, \
-					void *out, void *in) \
+#define TRAMPOLINE_VOID(func, handler) \
+	static void func(struct apple_dcp *dcp, void *out, void *in) \
 	{ \
-		dev_dbg(dcp->dev, "received callback %s\n", #name); \
-		dcpep_cb_ ## name(dcp); \
+		dev_dbg(dcp->dev, "received callback %s\n", #handler); \
+		handler(dcp); \
 	}
 
-#define TRAMPOLINE_IN(name, T_in) \
+#define TRAMPOLINE_IN(func, handler, T_in) \
 	typedef void (*callback_ ## name)(struct apple_dcp *, T_in *); \
 	\
-	static void trampoline_ ## name(struct apple_dcp *dcp, \
-					void *out, void *in) \
+	static void func(struct apple_dcp *dcp, void *out, void *in) \
 	{ \
-		callback_ ## name cb = dcpep_cb_ ## name; \
+		callback_ ## name cb = handler; \
 		\
-		dev_dbg(dcp->dev, "received callback %s\n", #name); \
+		dev_dbg(dcp->dev, "received callback %s\n", #handler); \
 		cb(dcp, in); \
 	}
 
-#define TRAMPOLINE_INOUT(name, T_in, T_out) \
-	typedef T_out (*callback_ ## name)(struct apple_dcp *, T_in *); \
+#define TRAMPOLINE_INOUT(func, handler, T_in, T_out) \
+	typedef T_out (*callback_ ## handler)(struct apple_dcp *, T_in *); \
 	\
-	static void trampoline_ ## name(struct apple_dcp *dcp, \
-					void *out, void *in) \
+	static void func(struct apple_dcp *dcp, void *out, void *in) \
 	{ \
 		T_out *typed_out = out; \
-		callback_ ## name cb = dcpep_cb_ ## name; \
+		callback_ ## handler cb = handler; \
 		\
-		dev_dbg(dcp->dev, "received callback %s\n", #name); \
+		dev_dbg(dcp->dev, "received callback %s\n", #handler); \
 		*typed_out = cb(dcp, in); \
 	}
 
-#define TRAMPOLINE_OUT(name, T_out) \
-	static void trampoline_ ## name(struct apple_dcp *dcp, \
-					void *out, void *in) \
+#define TRAMPOLINE_OUT(func, handler, T_out) \
+	static void func(struct apple_dcp *dcp, void *out, void *in) \
 	{ \
 		T_out *typed_out = out; \
 		\
-		dev_dbg(dcp->dev, "received callback %s\n", #name); \
-		*typed_out = dcpep_cb_ ## name(dcp); \
+		dev_dbg(dcp->dev, "received callback %s\n", #handler); \
+		*typed_out = handler(dcp); \
 	}
 
-TRAMPOLINE_VOID(nop);
-TRAMPOLINE_OUT(true, u8);
-TRAMPOLINE_OUT(false, u8);
-TRAMPOLINE_OUT(zero, u32);
-TRAMPOLINE_VOID(swap_complete);
-TRAMPOLINE_INOUT(get_uint_prop, struct dcp_get_uint_prop_req, struct dcp_get_uint_prop_resp);
-TRAMPOLINE_INOUT(map_piodma, struct dcp_map_buf_req, struct dcp_map_buf_resp);
-TRAMPOLINE_INOUT(allocate_buffer, struct dcp_allocate_buffer_req, struct dcp_allocate_buffer_resp);
-TRAMPOLINE_INOUT(map_physical, struct dcp_map_physical_req, struct dcp_map_physical_resp);
-TRAMPOLINE_INOUT(map_reg, struct dcp_map_reg_req, struct dcp_map_reg_resp);
-TRAMPOLINE_INOUT(prop_start, u32, u8);
-TRAMPOLINE_INOUT(prop_chunk, struct dcp_set_dcpav_prop_chunk_req, u8);
-TRAMPOLINE_INOUT(prop_end, struct dcp_set_dcpav_prop_end_req, u8);
-TRAMPOLINE_VOID(boot_1);
-TRAMPOLINE_OUT(rt_bandwidth, struct dcp_rt_bandwidth);
-TRAMPOLINE_OUT(get_frequency, u64);
-TRAMPOLINE_OUT(get_time, u64);
-TRAMPOLINE_IN(hotplug, u64);
+TRAMPOLINE_VOID(trampoline_nop, dcpep_cb_nop);
+TRAMPOLINE_OUT(trampoline_true, dcpep_cb_true, u8);
+TRAMPOLINE_OUT(trampoline_false, dcpep_cb_false, u8);
+TRAMPOLINE_OUT(trampoline_zero, dcpep_cb_zero, u32);
+TRAMPOLINE_VOID(trampoline_swap_complete, dcpep_cb_swap_complete);
+TRAMPOLINE_INOUT(trampoline_get_uint_prop, dcpep_cb_get_uint_prop,
+		 struct dcp_get_uint_prop_req, struct dcp_get_uint_prop_resp);
+TRAMPOLINE_INOUT(trampoline_map_piodma, dcpep_cb_map_piodma,
+		 struct dcp_map_buf_req, struct dcp_map_buf_resp);
+TRAMPOLINE_INOUT(trampoline_allocate_buffer, dcpep_cb_allocate_buffer,
+		 struct dcp_allocate_buffer_req,
+		 struct dcp_allocate_buffer_resp);
+TRAMPOLINE_INOUT(trampoline_map_physical, dcpep_cb_map_physical,
+		 struct dcp_map_physical_req, struct dcp_map_physical_resp);
+TRAMPOLINE_INOUT(trampoline_map_reg, dcpep_cb_map_reg,
+		 struct dcp_map_reg_req, struct dcp_map_reg_resp);
+TRAMPOLINE_INOUT(trampoline_prop_start, dcpep_cb_prop_start, u32, u8);
+TRAMPOLINE_INOUT(trampoline_prop_chunk, dcpep_cb_prop_chunk,
+		 struct dcp_set_dcpav_prop_chunk_req, u8);
+TRAMPOLINE_INOUT(trampoline_prop_end, dcpep_cb_prop_end,
+		 struct dcp_set_dcpav_prop_end_req, u8);
+TRAMPOLINE_VOID(trampoline_boot_1, dcpep_cb_boot_1);
+TRAMPOLINE_OUT(trampoline_rt_bandwidth, dcpep_cb_rt_bandwidth,
+	       struct dcp_rt_bandwidth);
+TRAMPOLINE_OUT(trampoline_get_frequency, dcpep_cb_get_frequency, u64);
+TRAMPOLINE_OUT(trampoline_get_time, dcpep_cb_get_time, u64);
+TRAMPOLINE_IN(trampoline_hotplug, dcpep_cb_hotplug, u64);
 
 void (*const dcpep_cb_handlers[DCPEP_MAX_CB])(struct apple_dcp *, void *, void *) = {
 	[0] = trampoline_true, /* did_boot_signal */
