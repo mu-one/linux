@@ -180,22 +180,21 @@ static u8 dcp_pop_depth(u8 *depth)
 	return --(*depth);
 }
 
-#define DCP_METHOD(name, tag) \
-	[ name ] = { #name, "A" # tag }
+#define DCP_METHOD(name, tag) [name] = { #name, tag }
 
 const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
-	DCP_METHOD(dcpep_late_init_signal, 000),
-	DCP_METHOD(dcpep_setup_video_limits, 029),
-	DCP_METHOD(dcpep_set_create_dfb, 357),
-	DCP_METHOD(dcpep_start_signal, 401),
-	DCP_METHOD(dcpep_swap_start, 407),
-	DCP_METHOD(dcpep_swap_submit, 408),
-	DCP_METHOD(dcpep_set_display_device, 410),
-	DCP_METHOD(dcpep_set_digital_out_mode, 412),
-	DCP_METHOD(dcpep_create_default_fb, 442),
-	DCP_METHOD(dcpep_set_display_refresh_properties, 459),
-	DCP_METHOD(dcpep_flush_supports_power, 462),
-	DCP_METHOD(dcpep_set_power_state, 467),
+	DCP_METHOD(dcpep_late_init_signal, "A000"),
+	DCP_METHOD(dcpep_setup_video_limits, "A029"),
+	DCP_METHOD(dcpep_set_create_dfb, "A357"),
+	DCP_METHOD(dcpep_start_signal, "A401"),
+	DCP_METHOD(dcpep_swap_start, "A407"),
+	DCP_METHOD(dcpep_swap_submit, "A408"),
+	DCP_METHOD(dcpep_set_display_device, "A410"),
+	DCP_METHOD(dcpep_set_digital_out_mode, "A412"),
+	DCP_METHOD(dcpep_create_default_fb, "A442"),
+	DCP_METHOD(dcpep_set_display_refresh_properties, "A459"),
+	DCP_METHOD(dcpep_flush_supports_power, "A462"),
+	DCP_METHOD(dcpep_set_power_state, "A467"),
 };
 
 /* Call a DCP function given by a tag */
