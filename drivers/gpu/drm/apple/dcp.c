@@ -183,9 +183,9 @@ static u8 dcp_pop_depth(u8 *depth)
 }
 
 #define DCP_METHOD(name, tag) \
-	[dcp_ ## name ] = { #name, "A" # tag }
+	[dcpep_ ## name ] = { #name, "A" # tag }
 
-const struct dcp_method_entry dcp_methods[dcp_num_methods] = {
+const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
 	DCP_METHOD(late_init_signal, 000),
 	DCP_METHOD(setup_video_limits, 029),
 	DCP_METHOD(set_create_dfb, 357),
@@ -201,7 +201,7 @@ const struct dcp_method_entry dcp_methods[dcp_num_methods] = {
 };
 
 /* Call a DCP function given by a tag */
-void dcp_push(struct apple_dcp *dcp, bool oob, enum dcp_method method,
+void dcp_push(struct apple_dcp *dcp, bool oob, enum dcpep_method method,
 	      u32 in_len, u32 out_len, void *data, dcp_callback_t cb,
 	      void *cookie)
 {
@@ -242,6 +242,59 @@ void dcp_push(struct apple_dcp *dcp, bool oob, enum dcp_method method,
 	apple_rtkit_send_message(dcp->rtk, DCP_ENDPOINT,
 				 dcpep_msg(context, data_len, offset));
 }
+
+#define DCP_THUNK_VOID(name) \
+	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, \
+				dcp_callback_t cb, void *cookie) \
+	{ \
+		dcp_push(dcp, oob, dcpep_ ## name, 0, 0, NULL, cb, cookie); \
+	}
+
+#define DCP_THUNK_OUT(name, T_out) \
+	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, \
+				dcp_callback_t cb, void *cookie) \
+	{ \
+		dcp_push(dcp, oob, dcpep_ ## name, 0, sizeof(T_out), \
+			 NULL, cb, cookie); \
+	}
+
+#define DCP_THUNK_IN(name, T_in) \
+	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, T_in *data, \
+				dcp_callback_t cb, void *cookie) \
+	{ \
+		dcp_push(dcp, oob, dcpep_ ## name, sizeof(T_in), 0, \
+			 data, cb, cookie); \
+	}
+
+#define DCP_THUNK_INOUT(name, T_in, T_out) \
+	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, T_in *data, \
+				dcp_callback_t cb, void *cookie) \
+	{ \
+		dcp_push(dcp, oob, dcpep_ ## name, sizeof(T_in), sizeof(T_out), \
+			 data, cb, cookie); \
+	}
+
+DCP_THUNK_INOUT(swap_submit, struct dcp_swap_submit_req,
+		struct dcp_swap_submit_resp);
+
+DCP_THUNK_INOUT(swap_start, struct dcp_swap_start_req,
+		struct dcp_swap_start_resp);
+
+DCP_THUNK_INOUT(set_power_state, struct dcp_set_power_state_req,
+		struct dcp_set_power_state_resp);
+
+DCP_THUNK_INOUT(set_digital_out_mode, struct dcp_set_digital_out_mode_req,
+		u32);
+
+DCP_THUNK_INOUT(set_display_device, u32, u32);
+
+DCP_THUNK_OUT(set_display_refresh_properties, u32);
+DCP_THUNK_OUT(late_init_signal, u32);
+DCP_THUNK_IN(flush_supports_power, u8);
+DCP_THUNK_VOID(setup_video_limits);
+DCP_THUNK_OUT(create_default_fb, u32);
+DCP_THUNK_OUT(start_signal, u32);
+DCP_THUNK_VOID(set_create_dfb);
 
 /* Parse a callback tag "D123" into the ID 123. Returns -EINVAL on failure. */
 static int dcp_parse_tag(char tag[4])
@@ -572,36 +625,34 @@ static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 
 static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, false, dcp_set_display_refresh_properties, 0,
-		 4, NULL, boot_done, NULL);
+	dcp_set_display_refresh_properties(dcp, false, boot_done, NULL);
 }
 
 static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, false, dcp_late_init_signal, 0, 4, NULL, boot_5, NULL);
+	dcp_late_init_signal(dcp, false, boot_5, NULL);
 }
 
 static void boot_3(struct apple_dcp *dcp, void *out, void *cookie)
 {
 	u8 v_true = true;
 
-	dcp_push(dcp, false, dcp_flush_supports_power, sizeof(v_true), 0,
-		 &v_true, boot_4, NULL);
+	dcp_flush_supports_power(dcp, false, &v_true, boot_4, NULL);
 }
 
 static void boot_2(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, false, dcp_setup_video_limits, 0, 0, NULL, boot_3, NULL);
+	dcp_setup_video_limits(dcp, false, boot_3, NULL);
 }
 
 static void boot_1_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, false, dcp_create_default_fb, 0, sizeof(u32), NULL, boot_2, NULL);
+	dcp_create_default_fb(dcp, false, boot_2, NULL);
 }
 
 static void dcpep_cb_boot_1(struct apple_dcp *dcp)
 {
-	dcp_push(dcp, false, dcp_set_create_dfb, 0, 0, NULL, boot_1_5, NULL);
+	dcp_set_create_dfb(dcp, false, boot_1_5, NULL);
 	dcp->skip_ack = true;
 }
 
@@ -873,9 +924,7 @@ static void dcp_swap_started(struct apple_dcp *dcp, void *data, void *cookie)
 
 	dcp->swap.swap.swap_id = resp->swap_id;
 
-	dcp_push(dcp, false, dcp_swap_submit, sizeof(dcp->swap),
-		 sizeof(struct dcp_swap_submit_resp),
-		 &dcp->swap, dcp_swapped, NULL);
+	dcp_swap_submit(dcp, false, &dcp->swap, dcp_swapped, NULL);
 }
 
 /*
@@ -948,24 +997,19 @@ static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	struct dcp_swap_start_req start_req = { 0 };
 
-	dcp_push(dcp, false, dcp_swap_start,
-		 sizeof(struct dcp_swap_start_req),
-		 sizeof(struct dcp_swap_start_resp),
-		 &start_req, dcp_swap_started, NULL);
+	dcp_swap_start(dcp, false, &start_req, dcp_swap_started, NULL);
 }
 
 static void dcp_modeset_2(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_push(dcp, false, dcp_set_digital_out_mode, sizeof(dcp->mode),
-		 sizeof(u32), &dcp->mode, do_swap, NULL);
+	dcp_set_digital_out_mode(dcp, false, &dcp->mode, do_swap, NULL);
 }
 
 static void dcp_modeset_and_swap(struct apple_dcp *dcp)
 {
 	u32 handle = 2;
 
-	dcp_push(dcp, false, dcp_set_display_device, sizeof(handle),
-		 sizeof(u32), &handle, dcp_modeset_2, NULL);
+	dcp_set_display_device(dcp, false, &handle, dcp_modeset_2, NULL);
 }
 
 void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
@@ -1090,8 +1134,7 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 
 	switch (type) {
 	case DCPEP_TYPE_INITIALIZED:
-		dcp_push(dcp, false, dcp_start_signal, 0, sizeof(u32), NULL,
-			 dcp_started, NULL);
+		dcp_start_signal(dcp, false, dcp_started, NULL);
 		break;
 	case DCPEP_TYPE_MESSAGE:
 		dcpep_got_msg(dcp, message);
@@ -1233,10 +1276,7 @@ static void dcp_platform_shutdown(struct platform_device *pdev)
 		/* defaults are ok */
 	};
 
-	dcp_push(dcp, false, dcp_set_power_state,
-		 sizeof(struct dcp_set_power_state_req),
-		 sizeof(struct dcp_set_power_state_resp),
-		 &req, NULL, NULL);
+	dcp_set_power_state(dcp, false, &req, NULL, NULL);
 }
 
 static const struct of_device_id of_match[] = {

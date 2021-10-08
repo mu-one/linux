@@ -217,20 +217,20 @@ struct dcp_rt_bandwidth {
 
 /* Method calls */
 
-enum dcp_method {
-	dcp_late_init_signal,
-	dcp_setup_video_limits,
-	dcp_set_create_dfb,
-	dcp_start_signal,
-	dcp_swap_start,
-	dcp_swap_submit,
-	dcp_set_display_device,
-	dcp_set_digital_out_mode,
-	dcp_create_default_fb,
-	dcp_set_display_refresh_properties,
-	dcp_flush_supports_power,
-	dcp_set_power_state,
-	dcp_num_methods
+enum dcpep_method {
+	dcpep_late_init_signal,
+	dcpep_setup_video_limits,
+	dcpep_set_create_dfb,
+	dcpep_start_signal,
+	dcpep_swap_start,
+	dcpep_swap_submit,
+	dcpep_set_display_device,
+	dcpep_set_digital_out_mode,
+	dcpep_create_default_fb,
+	dcpep_set_display_refresh_properties,
+	dcpep_flush_supports_power,
+	dcpep_set_power_state,
+	dcpep_num_methods
 };
 
 struct dcp_method_entry {
