@@ -181,21 +181,21 @@ static u8 dcp_pop_depth(u8 *depth)
 }
 
 #define DCP_METHOD(name, tag) \
-	[dcpep_ ## name ] = { #name, "A" # tag }
+	[ name ] = { #name, "A" # tag }
 
 const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
-	DCP_METHOD(late_init_signal, 000),
-	DCP_METHOD(setup_video_limits, 029),
-	DCP_METHOD(set_create_dfb, 357),
-	DCP_METHOD(start_signal, 401),
-	DCP_METHOD(swap_start, 407),
-	DCP_METHOD(swap_submit, 408),
-	DCP_METHOD(set_display_device, 410),
-	DCP_METHOD(set_digital_out_mode, 412),
-	DCP_METHOD(create_default_fb, 442),
-	DCP_METHOD(set_display_refresh_properties, 459),
-	DCP_METHOD(flush_supports_power, 462),
-	DCP_METHOD(set_power_state, 467),
+	DCP_METHOD(dcpep_late_init_signal, 000),
+	DCP_METHOD(dcpep_setup_video_limits, 029),
+	DCP_METHOD(dcpep_set_create_dfb, 357),
+	DCP_METHOD(dcpep_start_signal, 401),
+	DCP_METHOD(dcpep_swap_start, 407),
+	DCP_METHOD(dcpep_swap_submit, 408),
+	DCP_METHOD(dcpep_set_display_device, 410),
+	DCP_METHOD(dcpep_set_digital_out_mode, 412),
+	DCP_METHOD(dcpep_create_default_fb, 442),
+	DCP_METHOD(dcpep_set_display_refresh_properties, 459),
+	DCP_METHOD(dcpep_flush_supports_power, 462),
+	DCP_METHOD(dcpep_set_power_state, 467),
 };
 
 /* Call a DCP function given by a tag */
