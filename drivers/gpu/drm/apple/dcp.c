@@ -243,58 +243,59 @@ void dcp_push(struct apple_dcp *dcp, bool oob, enum dcpep_method method,
 				 dcpep_msg(context, data_len, offset));
 }
 
-#define DCP_THUNK_VOID(name) \
-	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, \
-				dcp_callback_t cb, void *cookie) \
+#define DCP_THUNK_VOID(func, handle) \
+	static void func(struct apple_dcp *dcp, bool oob, dcp_callback_t cb, \
+			 void *cookie) \
 	{ \
-		dcp_push(dcp, oob, dcpep_ ## name, 0, 0, NULL, cb, cookie); \
+		dcp_push(dcp, oob, handle, 0, 0, NULL, cb, cookie); \
 	}
 
-#define DCP_THUNK_OUT(name, T_out) \
-	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, \
-				dcp_callback_t cb, void *cookie) \
+#define DCP_THUNK_OUT(func, handle, T) \
+	static void func(struct apple_dcp *dcp, bool oob, dcp_callback_t cb, \
+			 void *cookie) \
 	{ \
-		dcp_push(dcp, oob, dcpep_ ## name, 0, sizeof(T_out), \
-			 NULL, cb, cookie); \
+		dcp_push(dcp, oob, handle, 0, sizeof(T), NULL, cb, cookie); \
 	}
 
-#define DCP_THUNK_IN(name, T_in) \
-	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, T_in *data, \
-				dcp_callback_t cb, void *cookie) \
+#define DCP_THUNK_IN(func, handle, T) \
+	static void func(struct apple_dcp *dcp, bool oob, T *data, \
+			 dcp_callback_t cb, void *cookie) \
 	{ \
-		dcp_push(dcp, oob, dcpep_ ## name, sizeof(T_in), 0, \
+		dcp_push(dcp, oob, handle, sizeof(T), 0, data, cb, cookie); \
+	}
+
+#define DCP_THUNK_INOUT(func, handle, T_in, T_out) \
+	static void func(struct apple_dcp *dcp, bool oob, T_in *data, \
+			 dcp_callback_t cb, void *cookie) \
+	{ \
+		dcp_push(dcp, oob, handle, sizeof(T_in), sizeof(T_out), \
 			 data, cb, cookie); \
 	}
 
-#define DCP_THUNK_INOUT(name, T_in, T_out) \
-	static void dcp_ ## name(struct apple_dcp *dcp, bool oob, T_in *data, \
-				dcp_callback_t cb, void *cookie) \
-	{ \
-		dcp_push(dcp, oob, dcpep_ ## name, sizeof(T_in), sizeof(T_out), \
-			 data, cb, cookie); \
-	}
-
-DCP_THUNK_INOUT(swap_submit, struct dcp_swap_submit_req,
+DCP_THUNK_INOUT(dcp_swap_submit, dcpep_swap_submit, struct dcp_swap_submit_req,
 		struct dcp_swap_submit_resp);
 
-DCP_THUNK_INOUT(swap_start, struct dcp_swap_start_req,
+DCP_THUNK_INOUT(dcp_swap_start, dcpep_swap_start, struct dcp_swap_start_req,
 		struct dcp_swap_start_resp);
 
-DCP_THUNK_INOUT(set_power_state, struct dcp_set_power_state_req,
+DCP_THUNK_INOUT(dcp_set_power_state, dcpep_set_power_state,
+		struct dcp_set_power_state_req,
 		struct dcp_set_power_state_resp);
 
-DCP_THUNK_INOUT(set_digital_out_mode, struct dcp_set_digital_out_mode_req,
-		u32);
+DCP_THUNK_INOUT(dcp_set_digital_out_mode, dcpep_set_digital_out_mode,
+		struct dcp_set_digital_out_mode_req, u32);
 
-DCP_THUNK_INOUT(set_display_device, u32, u32);
+DCP_THUNK_INOUT(dcp_set_display_device, dcpep_set_display_device, u32, u32);
 
-DCP_THUNK_OUT(set_display_refresh_properties, u32);
-DCP_THUNK_OUT(late_init_signal, u32);
-DCP_THUNK_IN(flush_supports_power, u8);
-DCP_THUNK_VOID(setup_video_limits);
-DCP_THUNK_OUT(create_default_fb, u32);
-DCP_THUNK_OUT(start_signal, u32);
-DCP_THUNK_VOID(set_create_dfb);
+DCP_THUNK_OUT(dcp_set_display_refresh_properties,
+	      dcpep_set_display_refresh_properties, u32);
+
+DCP_THUNK_OUT(dcp_late_init_signal, dcpep_late_init_signal, u32);
+DCP_THUNK_IN(dcp_flush_supports_power, dcpep_flush_supports_power, u8);
+DCP_THUNK_OUT(dcp_create_default_fb, dcpep_create_default_fb, u32);
+DCP_THUNK_OUT(dcp_start_signal, dcpep_start_signal, u32);
+DCP_THUNK_VOID(dcp_setup_video_limits, dcpep_setup_video_limits);
+DCP_THUNK_VOID(dcp_set_create_dfb, dcpep_set_create_dfb);
 
 /* Parse a callback tag "D123" into the ID 123. Returns -EINVAL on failure. */
 static int dcp_parse_tag(char tag[4])
