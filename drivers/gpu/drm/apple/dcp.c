@@ -833,30 +833,21 @@ static void dcpep_handle_cb(struct apple_dcp *dcp, enum dcp_context_id context,
 	int tag = dcp_parse_tag(hdr->tag);
 	struct dcp_cb_channel *ch = dcp_get_cb_channel(dcp, context);
 	u8 depth;
-	bool ack = true;
 
-	if (tag < 0 || tag >= DCPEP_MAX_CB) {
-		dev_warn(dev, "received invalid tag %c%c%c%c\n",
+	if (tag < 0 || tag >= DCPEP_MAX_CB || !dcpep_cb_handlers[tag]) {
+		dev_warn(dev, "received unknown callback %c%c%c%c\n",
 			 hdr->tag[3], hdr->tag[2], hdr->tag[1], hdr->tag[0]);
-		goto ack;
+		return;
 	}
 
 	depth = dcp_push_depth(&ch->depth);
-
-	if (!dcpep_cb_handlers[tag]) {
-		dev_warn(dev, "received unknown callback %c%c%c%c\n",
-			 hdr->tag[3], hdr->tag[2], hdr->tag[1], hdr->tag[0]);
-		goto ack;
-	}
 
 	in = data + sizeof(*hdr);
 	out = in + hdr->in_len;
 
 	ch->output[depth] = out;
-	ack = dcpep_cb_handlers[tag](dcp, out, in);
 
-ack:
-	if (ack)
+	if (dcpep_cb_handlers[tag](dcp, out, in))
 		dcp_ack(dcp, context);
 }
 

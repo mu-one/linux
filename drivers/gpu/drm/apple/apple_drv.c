@@ -71,15 +71,14 @@ static int apple_plane_atomic_check(struct drm_plane *plane,
 
 	/*
 	 * DCP limits downscaling to 2x and upscaling to 4x. Attempting to
-	 * scale outside these bounds results in an error reported on the DCP
-	 * syslog and a lost swap.
+	 * scale outside these bounds errors out when swapping.
 	 *
 	 * This function also takes care of clipping the src/dest rectangles,
 	 * which is required for correct operation. Partially off-screen
 	 * surfaces may appear corrupted.
 	 *
-	 * There is no distinction between plane types in the hardware, so we
-	 * set can_position. If the primary plane does not fill the screen, the
+	 * DCP does not distinguish plane types in the hardware, so we set
+	 * can_position. If the primary plane does not fill the screen, the
 	 * hardware will fill in zeroes (black).
 	 */
 	return drm_atomic_helper_check_plane_state(new_plane_state,
