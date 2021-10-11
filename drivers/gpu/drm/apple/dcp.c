@@ -1012,12 +1012,9 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 	struct dcp_swap_submit_req *req = &dcp->swap;
 	int l;
 
-	crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
+	WARN_ON(dcp_channel_busy(&dcp->ch_cmd));
 
-	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel")) {
-		apple_crtc_vblank(dcp->crtc);
-		return;
-	}
+	crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
 
 	/* Reset to defaults */
 	memset(req, 0, sizeof(*req));
