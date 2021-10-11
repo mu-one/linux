@@ -1185,29 +1185,6 @@ static int dcp_platform_probe(struct platform_device *pdev)
 	dma_addr_t shmem_iova;
 	int ret;
 
-	BUILD_BUG_ON(sizeof(struct dcp_rt_bandwidth) != 0x3C);
-	BUILD_BUG_ON(sizeof(struct dcp_rect) != 0x10);
-	BUILD_BUG_ON(sizeof(struct dcp_iouserclient) != 0x10);
-	BUILD_BUG_ON(sizeof(struct dcp_swap) != 0x274);
-	BUILD_BUG_ON(sizeof(struct dcp_plane_info) != 0x50);
-	BUILD_BUG_ON(sizeof(struct dcp_component_types) != 0x8);
-	BUILD_BUG_ON(sizeof(struct dcp_surface) != 0x204);
-	BUILD_BUG_ON(sizeof(struct dcp_swap_start_req) != 0x18);
-	BUILD_BUG_ON(sizeof(struct dcp_swap_start_resp) != 0x18);
-	BUILD_BUG_ON(sizeof(struct dcp_swap_submit_req) != 0x8a0);
-	BUILD_BUG_ON(sizeof(struct dcp_swap_submit_resp) != 0x8);
-	BUILD_BUG_ON(sizeof(struct dcp_map_reg_req) != 0x10);
-	BUILD_BUG_ON(sizeof(struct dcp_map_reg_resp) != 0x14);
-	BUILD_BUG_ON(sizeof(struct dcp_get_uint_prop_req) != 0x50);
-	BUILD_BUG_ON(sizeof(struct dcp_get_uint_prop_resp) != 0xc);
-	BUILD_BUG_ON(sizeof(struct dcp_map_physical_req) != 0x18);
-	BUILD_BUG_ON(sizeof(struct dcp_map_physical_resp) != 0x14);
-	BUILD_BUG_ON(sizeof(struct dcp_map_buf_req) != 0xc);
-	BUILD_BUG_ON(sizeof(struct dcp_map_buf_resp) != 0x14);
-	BUILD_BUG_ON(sizeof(struct dcp_allocate_buffer_req) != 0x14);
-	BUILD_BUG_ON(sizeof(struct dcp_allocate_buffer_resp) != 0x1c);
-	BUILD_BUG_ON(sizeof(struct dcp_set_digital_out_mode_req) != 0x8);
-
 	dcp = devm_kzalloc(dev, sizeof(*dcp), GFP_KERNEL);
 	if (!dcp)
 		return -ENOMEM;
