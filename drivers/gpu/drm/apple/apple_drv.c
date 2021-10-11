@@ -115,7 +115,8 @@ u64 apple_format_modifiers[] = {
 	DRM_FORMAT_MOD_INVALID
 };
 
-struct drm_plane *apple_plane_init(struct drm_device *dev, enum drm_plane_type type)
+struct drm_plane *apple_plane_init(struct drm_device *dev,
+				   enum drm_plane_type type)
 {
 	int ret;
 	struct drm_plane *plane;
@@ -135,15 +136,14 @@ struct drm_plane *apple_plane_init(struct drm_device *dev, enum drm_plane_type t
 
 static int apple_enable_vblank(struct drm_crtc *crtc)
 {
-	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
-	apple_crtc->vsync_disabled = false;
+	to_apple_crtc(crtc)->vsync_disabled = false;
+
 	return 0;
 }
 
 static void apple_disable_vblank(struct drm_crtc *crtc)
 {
-	struct apple_crtc *apple_crtc = to_apple_crtc(crtc);
-	apple_crtc->vsync_disabled = true;
+	to_apple_crtc(crtc)->vsync_disabled = true;
 }
 
 static enum drm_connector_status
@@ -281,7 +281,8 @@ static int apple_probe_per_dcp(struct device *dev,
 		return ret;
 
 	connector = devm_kzalloc(dev, sizeof(*connector), GFP_KERNEL);
-	drm_connector_helper_add(&connector->base, &apple_connector_helper_funcs);
+	drm_connector_helper_add(&connector->base,
+				 &apple_connector_helper_funcs);
 
 	ret = drm_connector_init(drm, &connector->base, &apple_connector_funcs,
 				 DRM_MODE_CONNECTOR_HDMIA);
@@ -304,30 +305,33 @@ static int apple_platform_probe(struct platform_device *pdev)
 {
 	struct apple_drm_private *apple;
 	struct platform_device *dcp[MAX_COPROCESSORS];
-	int ret;
-	int i;
+	int ret, nr_dcp, i;
 
-	for (i = 0; i < MAX_COPROCESSORS; ++i) {
+	for (nr_dcp = 0; nr_dcp < MAX_COPROCESSORS; ++nr_dcp) {
 		struct device_node *np;
 
 		np = of_parse_phandle(pdev->dev.of_node,
-				     "apple,coprocessors", i);
+				     "apple,coprocessors", nr_dcp);
 
 		if (!np)
-			return -ENODEV;
+			break;
 
-		dcp[i] = of_find_device_by_node(np);
+		dcp[nr_dcp] = of_find_device_by_node(np);
 
-		if (!dcp[i])
+		if (!dcp[nr_dcp])
 			return -ENODEV;
 
 		/* DCP needs to be initialized before KMS can come online */
-		if (!platform_get_drvdata(dcp[i]))
+		if (!platform_get_drvdata(dcp[nr_dcp]))
 			return -EPROBE_DEFER;
 
-		if (!dcp_is_initialized(dcp[i]))
+		if (!dcp_is_initialized(dcp[nr_dcp]))
 			return -EPROBE_DEFER;
 	}
+
+	/* Need at least 1 DCP for a display subsystem */
+	if (nr_dcp < 1)
+		return -ENODEV;
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret)
@@ -360,7 +364,7 @@ static int apple_platform_probe(struct platform_device *pdev)
 	apple->drm.mode_config.funcs = &apple_mode_config_funcs;
 	apple->drm.mode_config.helper_private = &apple_mode_config_helpers;
 
-	for (i = 0; i < MAX_COPROCESSORS; ++i) {
+	for (i = 0; i < nr_dcp; ++i) {
 		ret = apple_probe_per_dcp(&pdev->dev, &apple->drm, dcp[i]);
 
 		if (ret)
