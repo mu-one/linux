@@ -35,8 +35,7 @@
 
 #define FRAC_16_16(mult, div)    (((mult) << 16) / (div))
 
-/* T8103 has an internal DCP and an external DCP. TODO: support external dcp */
-#define MAX_COPROCESSORS 1
+#define MAX_COPROCESSORS 2
 
 struct apple_drm_private {
 	struct drm_device drm;
