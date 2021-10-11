@@ -59,19 +59,19 @@ static inline u32 drm_format_to_dcp(u32 drm)
 	case DRM_FORMAT_XBGR8888:
 	case DRM_FORMAT_ABGR8888:
 		return fourcc_code('A', 'B', 'G', 'R');
-
-	default:
-		WARN();
-		return 0;
 	}
+
+	pr_warn("DRM format %X not supported in DCP\n", drm);
+	return 0;
 }
 
-void dcp_link(struct platform_device *pdev, struct apple_crtc *apple, struct apple_connector *connector);
+void dcp_link(struct platform_device *pdev, struct apple_crtc *apple,
+	      struct apple_connector *connector);
 void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state);
 bool dcp_is_initialized(struct platform_device *pdev);
 void apple_crtc_vblank(struct apple_crtc *apple);
 int dcp_get_modes(struct drm_connector *connector);
 int dcp_mode_valid(struct drm_connector *connector,
-                   struct drm_display_mode *mode);
+		   struct drm_display_mode *mode);
 
 #endif
