@@ -1068,7 +1068,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 			.has_comp = 1,
 			.has_planes = 1,
 
-			.unk_13 = 13,
+			//.unk_13 = 13,
 			//.unk_14 = 1,
 		};
 	}
@@ -1083,8 +1083,8 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 		mode = lookup_mode(dcp, &crtc_state->mode);
 
 		dcp->mode = (struct dcp_set_digital_out_mode_req) {
-			.dp_color_mode_id = mode->color_mode_id,
-			.dp_timing_mode_id = mode->timing_mode_id
+			.color_mode_id = mode->color_mode_id,
+			.timing_mode_id = mode->timing_mode_id
 		};
 
 		dcp_set_display_device(dcp, false, &handle, dcp_modeset, NULL);
