@@ -1098,9 +1098,7 @@ EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
-	u32 *resp = data;
-
-	dev_info(dcp->dev, "DCP started, status %u\n", *resp);
+	dev_info(dcp->dev, "DCP booted\n");
 	dcp->active = true;
 }
 
