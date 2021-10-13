@@ -1050,9 +1050,6 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 		req->swap.src_rect[l] = drm_to_dcp_rect(&src_rect);
 		req->swap.dst_rect[l] = drm_to_dcp_rect(&new_state->dst);
 
-		req->swap.surf_flags[l] = 1;
-		req->swap.surf_ids[l] = l;
-
 		req->surf[l] = (struct dcp_surface) {
 			.format = drm_format_to_dcp(fb->format->format),
 			.stride = fb->pitches[0],
