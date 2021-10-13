@@ -1069,7 +1069,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 			.has_planes = 1,
 
 			.unk_13 = 13,
-			.unk_14 = 1,
+			//.unk_14 = 1,
 		};
 	}
 
