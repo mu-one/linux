@@ -1130,7 +1130,8 @@ static struct apple_rtkit_ops rtkit_ops = {
 	.recv_message = dcp_got_msg,
 };
 
-void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc, struct apple_connector *connector)
+void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc,
+	      struct apple_connector *connector)
 {
 	struct apple_dcp *dcp = platform_get_drvdata(pdev);
 

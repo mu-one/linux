@@ -39,8 +39,9 @@ struct apple_connector {
  * formats, an extra RGBA format, and a biplanar RGB10_A8 format (fourcc b3a8)
  * used for HDR.
  *
- * XXX: we don't have non-alpha formats but userspace breaks without XRGB. It
- * doesn't matter for the primary plane but matters for cursors/overlays.
+ * Note: we don't have non-alpha formats but userspace breaks without XRGB. It
+ * doesn't matter for the primary plane, but cursors/overlays must not
+ * advertise formats without alpha.
  */
 static const u32 dcp_formats[] = {
 	DRM_FORMAT_XRGB8888,

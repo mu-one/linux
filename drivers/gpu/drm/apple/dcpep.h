@@ -110,7 +110,7 @@ dcpep_ack(enum dcp_context_id id)
 	return dcpep_msg(id, 0, 0) | DCPEP_ACK;
 }
 
-/* Structures used in v11.4 firmware (TODO: versioning as these change) */
+/* Structures used in v11.4 firmware */
 
 #define SWAP_SURFACES 3
 #define MAX_PLANES 3
