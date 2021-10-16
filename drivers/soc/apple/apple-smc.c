@@ -15,6 +15,7 @@
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
+#include <linux/rfkill.h>
 
 struct apple_smc {
 	struct device *dev;
@@ -36,6 +37,9 @@ struct apple_smc {
 	bool cmd_use_tags;
 
 	struct irq_domain *irq_domain;
+
+	// TODO: unregister
+	struct rfkill *rfkill;
 };
 
 #define APPLE_SMC_BOOT_TIMEOUT msecs_to_jiffies(1000)
@@ -135,6 +139,11 @@ static int apple_smc_write_key(struct apple_smc *smc, u32 key, void *data,
 static int apple_smc_write_key_u8(struct apple_smc *smc, u32 key, u8 value)
 {
 	return apple_smc_write_key(smc, key, &value, sizeof(u8));
+}
+
+static int apple_smc_write_key_u32(struct apple_smc *smc, u32 key, u32 value)
+{
+	return apple_smc_write_key(smc, key, &value, sizeof(u32));
 }
 
 static void apple_smc_handle_notification(struct apple_smc *smc, u64 message)
@@ -259,6 +268,43 @@ static const struct apple_rtkit_ops apple_smc_rtkit_ops = {
 	.shmem_unmap = apple_smc_unmap,
 };
 
+#define APPLE_SMC_RFKILL_KEY 0x67503064 /* gP0d */
+
+static int
+apple_smc_set_rfkill(struct apple_smc *smc, bool enabled)
+{
+	return apple_smc_write_key_u32(smc, APPLE_SMC_RFKILL_KEY,
+				       0x800000 | enabled);
+}
+
+static int
+apple_smc_set_block(void *data, bool blocked)
+{
+	struct apple_smc *smc = data;
+	int ret;
+	printk("setting %u\n", blocked);
+
+	ret = apple_smc_set_rfkill(smc, blocked);
+	if (ret)
+		return ret;
+
+	printk("set 1/2\n");
+
+	return apple_smc_set_rfkill(smc, !blocked);
+}
+
+static const struct rfkill_ops apple_smc_rfkill_ops = {
+	.set_block = apple_smc_set_block
+};
+
+static int apple_smc_rfkill_init(struct apple_smc *smc)
+{
+	smc->rfkill = rfkill_alloc("apple-smc", smc->dev, RFKILL_TYPE_WLAN,
+				   &apple_smc_rfkill_ops, smc);
+
+	return rfkill_register(smc->rfkill);
+}
+
 static int apple_smc_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -336,6 +382,13 @@ static int apple_smc_probe(struct platform_device *pdev)
 		smc->dev->of_node, &apple_smc_irq_domain_ops, smc);
 	if (!smc->irq_domain)
 		return -EINVAL;
+
+	ret = apple_smc_rfkill_init(smc);
+	if (ret) {
+		dev_err(dev, "failed to init rfkill, error %d\n", ret);
+		smc->rfkill = NULL;
+		/* Proceed without rfkill */
+	}
 
 	return 0;
 }

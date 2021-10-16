@@ -407,15 +407,16 @@ static irqreturn_t apple_pcie_port_irq(int irq, void *data)
 {
 	struct apple_pcie_port *port = data;
 	unsigned int hwirq = irq_domain_get_irq_data(port->domain, irq)->hwirq;
+	printk("IRQ!\n");
 
 	switch (hwirq) {
 	case PORT_INT_LINK_UP:
-		dev_info_ratelimited(port->pcie->dev, "Link up on %pOF\n",
+		dev_info(port->pcie->dev, "Link up on %pOF\n",
 				     port->np);
 		complete_all(&port->pcie->event);
 		break;
 	case PORT_INT_LINK_DOWN:
-		dev_info_ratelimited(port->pcie->dev, "Link down on %pOF\n",
+		dev_info(port->pcie->dev, "Link down on %pOF\n",
 				     port->np);
 		break;
 	default:
