@@ -5,9 +5,10 @@
 #include <linux/slab.h>
 #include <linux/of_device.h>
 #include <linux/dma-mapping.h>
+#include <linux/iommu.h>
 #include <linux/align.h>
 #include <linux/apple-mailbox.h>
-#include <linux/apple-rtkit.h>
+#include <linux/soc/apple/rtkit.h>
 
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_fourcc.h>
@@ -1133,9 +1134,60 @@ static void dcp_got_msg(void *cookie, u8 endpoint, u64 message)
 		dev_warn(dcp->dev, "Ignoring unknown message %llx\n", message);
 }
 
+static int dcp_rtk_shmem_setup(void *cookie, struct apple_rtkit_shmem *bfr,
+				   dma_addr_t iova, size_t size)
+{
+	struct apple_dcp *dcp = cookie;
+
+	if (iova) {
+		struct iommu_domain *domain = iommu_get_domain_for_dev(dcp->dev);
+		phys_addr_t phy_addr;
+
+		if (!domain)
+			return -ENOMEM;
+
+		// TODO: get map from device-tree
+		phy_addr = iommu_iova_to_phys(domain, iova & 0xFFFFFFFF);
+		if (!phy_addr)
+			return -ENOMEM;
+
+		// TODO: verify phy_addr, cache attribute
+		bfr->buffer = memremap(phy_addr, size, MEMREMAP_WB);
+		if (!bfr->buffer)
+			return -ENOMEM;
+
+		bfr->is_mapped = true;
+		dev_info(dcp->dev, "shmem_setup: iova: %lx -> pa: %lx -> iomem: %lx",
+			(uintptr_t)iova, (uintptr_t)phy_addr, (uintptr_t)bfr->buffer);
+	} else {
+		bfr->buffer = dma_alloc_coherent(dcp->dev, size, &iova, GFP_KERNEL);
+		if (!bfr->buffer)
+			return -ENOMEM;
+
+		dev_info(dcp->dev, "shmem_setup: iova: %lx, buffer: %lx",
+			(uintptr_t)iova, (uintptr_t)bfr->buffer);
+	}
+
+	bfr->size = size;
+	bfr->iova = iova;
+
+	return 0;
+}
+
+static void dcp_rtk_shmem_destroy(void *cookie, struct apple_rtkit_shmem *bfr)
+{
+	struct apple_dcp *dcp = cookie;
+
+	if (bfr->is_mapped)
+		memunmap(bfr->buffer);
+	else
+		dma_free_coherent(dcp->dev, bfr->size, bfr->buffer, bfr->iova);
+}
+
 static struct apple_rtkit_ops rtkit_ops = {
-	.flags = APPLE_RTKIT_SHMEM_OWNER_LINUX,
 	.recv_message = dcp_got_msg,
+	.shmem_setup = dcp_rtk_shmem_setup,
+	.shmem_destroy = dcp_rtk_shmem_destroy,
 };
 
 void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc,
@@ -1215,8 +1267,16 @@ static int dcp_platform_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	dcp->rtk = apple_rtkit_init(dev, dcp, res, "mbox", 0, &rtkit_ops);
-	apple_rtkit_boot_wait(dcp->rtk, DCP_BOOT_TIMEOUT);
+	dcp->rtk = devm_apple_rtkit_init(dev, dcp, "mbox", 0, &rtkit_ops);
+	if (IS_ERR(dcp->rtk))
+		return dev_err_probe(dev, PTR_ERR(dcp->rtk),
+                                     "Failed to intialize RTKit");
+
+	ret = apple_rtkit_wake(dcp->rtk);
+	if (ret)
+		return dev_err_probe(dev, PTR_ERR(dcp->rtk),
+			"Failed to boot RTKit: %d", ret);
+
 	apple_rtkit_start_ep(dcp->rtk, DCP_ENDPOINT);
 
 	dcp->shmem = dma_alloc_coherent(dev, DCP_SHMEM_SIZE, &shmem_iova,
