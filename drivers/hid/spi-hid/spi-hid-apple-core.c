@@ -31,7 +31,7 @@
 
 #include "spi-hid-apple.h"
 
-#define SPIHID_DEF_WAIT msecs_to_jiffies(20)
+#define SPIHID_DEF_WAIT msecs_to_jiffies(100)
 
 #define SPIHID_MAX_INPUT_REPORT_SIZE 0x800
 
@@ -943,7 +943,8 @@ int spihid_apple_core_probe(struct spi_device *spi, struct spihid_apple_ops *ops
 
 	// wait for boot message
 	err = wait_event_interruptible_timeout(spihid->wait,
-					       spihid->status_booted, msecs_to_jiffies(500));
+					       spihid->status_booted,
+					       msecs_to_jiffies(1000));
 	if (err == 0)
 		err = -ENODEV;
 	if (err < 0) {
