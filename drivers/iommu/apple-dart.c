@@ -972,8 +972,8 @@ static int apple_dart_probe(struct platform_device *pdev)
 
 	dev_info(
 		&pdev->dev,
-		"DART [pagesize %x, bypass support: %d, bypass forced: %d] initialized\n",
-		dart->pgsize, dart->supports_bypass, dart->force_bypass);
+		"DART [pagesize %x, bypass support: %d, bypass forced: %d, locked: %d] initialized\n",
+		dart->pgsize, dart->supports_bypass, dart->force_bypass, dart->locked);
 	return 0;
 
 err_sysfs_remove:
