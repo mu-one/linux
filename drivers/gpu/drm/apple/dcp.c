@@ -193,10 +193,10 @@ const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
 	DCP_METHOD(dcpep_swap_submit, "A408"),
 	DCP_METHOD(dcpep_set_display_device, "A410"),
 	DCP_METHOD(dcpep_set_digital_out_mode, "A412"),
-	DCP_METHOD(dcpep_create_default_fb, "A442"),
-	DCP_METHOD(dcpep_set_display_refresh_properties, "A459"),
-	DCP_METHOD(dcpep_flush_supports_power, "A462"),
-	DCP_METHOD(dcpep_set_power_state, "A467"),
+	DCP_METHOD(dcpep_create_default_fb, "A443"),
+	DCP_METHOD(dcpep_set_display_refresh_properties, "A460"),
+	DCP_METHOD(dcpep_flush_supports_power, "A463"),
+	DCP_METHOD(dcpep_set_power_state, "A468"),
 };
 
 /* Call a DCP function given by a tag */
@@ -290,7 +290,7 @@ DCP_THUNK_OUT(dcp_set_display_refresh_properties,
 	      dcpep_set_display_refresh_properties, u32);
 
 DCP_THUNK_OUT(dcp_late_init_signal, dcpep_late_init_signal, u32);
-DCP_THUNK_IN(dcp_flush_supports_power, dcpep_flush_supports_power, u8);
+DCP_THUNK_IN(dcp_flush_supports_power, dcpep_flush_supports_power, u32);
 DCP_THUNK_OUT(dcp_create_default_fb, dcpep_create_default_fb, u32);
 DCP_THUNK_OUT(dcp_start_signal, dcpep_start_signal, u32);
 DCP_THUNK_VOID(dcp_setup_video_limits, dcpep_setup_video_limits);
@@ -631,7 +631,7 @@ static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
 
 static void boot_3(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	u8 v_true = true;
+	u32 v_true = true;
 
 	dcp_flush_supports_power(dcp, false, &v_true, boot_4, NULL);
 }
@@ -803,12 +803,12 @@ bool (*const dcpep_cb_handlers[DCPEP_MAX_CB])(struct apple_dcp *, void *, void *
 	[109] = trampoline_true, /* create_pmu_service */
 	[110] = trampoline_true, /* create_iomfb_service */
 	[111] = trampoline_false, /* create_backlight_service */
-	[121] = trampoline_prop_start,
-	[122] = trampoline_prop_chunk,
-	[123] = trampoline_prop_end,
 	[116] = dcpep_cb_boot_1,
-	[117] = trampoline_false, /* is_dark_boot */
-	[119] = trampoline_false, /* read_edt_data */
+	[118] = trampoline_false, /* is_dark_boot / is_waking_from_hibernate*/
+	[120] = trampoline_false, /* read_edt_data */
+	[122] = trampoline_prop_start,
+	[123] = trampoline_prop_chunk,
+	[124] = trampoline_prop_end,
 	[201] = trampoline_map_piodma,
 	[206] = trampoline_true, /* match_pmu_service_2 */
 	[207] = trampoline_true, /* match_backlight_service */
@@ -1069,6 +1069,8 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 
 		req->surf[l] = (struct dcp_surface) {
 			.format = drm_format_to_dcp(fb->format->format),
+			.xfer_func = 13,
+			.colorspace = 1,
 			.stride = fb->pitches[0],
 			.width = fb->width,
 			.height = fb->height,

@@ -110,16 +110,18 @@ dcpep_ack(enum dcp_context_id id)
 	return dcpep_msg(id, 0, 0) | DCPEP_ACK;
 }
 
-/* Structures used in v11.4 firmware */
+/* Structures used in v12.0 firmware */
 
-#define SWAP_SURFACES 3
+#define SWAP_SURFACES 4
 #define MAX_PLANES 3
 
 struct dcp_iouserclient {
 	/* Handle for the IOUserClient. macOS sets this to a kernel VA. */
 	u64 handle;
 	u32 unk;
-	u32 flags;
+	u8 flag1;
+	u8 flag2;
+	u8 padding[2];
 } __packed;
 
 struct dcp_rect {
@@ -138,7 +140,9 @@ struct dcp_rect {
 #define DCP_REMOVE_LAYERS BIT(31)
 
 struct dcp_swap {
-	u64 unk0[8];
+	u64 ts1;
+	u64 ts2;
+	u64 unk_10[6];
 	u64 flags1;
 	u64 flags2;
 
@@ -152,7 +156,12 @@ struct dcp_swap {
 	u32 swap_enabled;
 	u32 swap_completed;
 
-	u32 unk1[101];
+	u32 unk_10c;
+	u8 unk_110[0x1b8];
+	u32 unk_2c8;
+	u8 unk_2cc[0x14];
+	u32 unk_2e0;
+	u8 unk_2e4[0x3c];
 } __packed;
 
 /* Information describing a plane of a planar compressed surface */
@@ -183,8 +192,8 @@ struct dcp_surface {
 	u32 plane_cnt2;
 	u32 format; /* DCP fourcc */
 	u32 unk_f;
-	u8 unk_13;
-	u8 unk_14;
+	u8 xfer_func;
+	u8 colorspace;
 	u32 stride;
 	u16 pix_size;
 	u8 pel_w;
@@ -323,14 +332,14 @@ struct dcp_swap_start_resp {
 struct dcp_swap_submit_req {
 	struct dcp_swap swap;
 	struct dcp_surface surf[SWAP_SURFACES];
-	u32 surf_iova[SWAP_SURFACES];
+	u64 surf_iova[SWAP_SURFACES];
 	u8 unkbool;
 	u64 unkdouble;
 	u32 unkint;
 	u8 swap_null;
 	u8 surf_null[SWAP_SURFACES];
 	u8 unkoutbool_null;
-	u8 padding[2];
+	u8 padding[1];
 } __packed;
 
 struct dcp_swap_submit_resp {
@@ -356,7 +365,7 @@ struct dcp_get_uint_prop_resp {
 struct dcp_set_power_state_req {
 	u64 unklong;
 	u8 unkbool;
-	u32 unkint_null;
+	u8 unkint_null;
 	u8 padding[2];
 } __packed;
 
