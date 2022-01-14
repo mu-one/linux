@@ -1043,6 +1043,8 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 
 	/* Reset to defaults */
 	memset(req, 0, sizeof(*req));
+	for (l = 0; l < SWAP_SURFACES; l++)
+		req->surf_null[l] = true;
 
 	for_each_oldnew_plane_in_state(state, plane, old_state, new_state, l) {
 		struct drm_framebuffer *fb = new_state->fb;
@@ -1056,9 +1058,9 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 			if (old_state->fb)
 				req->swap.swap_enabled |= DCP_REMOVE_LAYERS;
 
-			req->surf_null[l] = true;
 			continue;
 		}
+		req->surf_null[l] = false;
 
 		// XXX: awful hack! race condition between a framebuffer unbind
 		// getting swapped out and GEM unreferencing a framebuffer. If
