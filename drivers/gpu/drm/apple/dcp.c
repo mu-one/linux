@@ -730,6 +730,7 @@ void dcp_hotplug(struct work_struct *work)
 	if (dev && dev->registered)
 		drm_kms_helper_hotplug_event(dev);
 }
+EXPORT_SYMBOL_GPL(dcp_hotplug);
 
 static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 {
@@ -1022,6 +1023,7 @@ int dcp_get_modes(struct drm_connector *connector)
 
 	return dcp->nr_modes;
 }
+EXPORT_SYMBOL_GPL(dcp_get_modes);
 
 /* The user may own drm_display_mode, so we need to search for our copy */
 static struct dcp_display_mode *lookup_mode(struct apple_dcp *dcp,
@@ -1048,6 +1050,7 @@ int dcp_mode_valid(struct drm_connector *connector,
 
 	return lookup_mode(dcp, mode) ? MODE_OK : MODE_BAD;
 }
+EXPORT_SYMBOL_GPL(dcp_mode_valid);
 
 /* Helpers to modeset and swap, used to flush */
 static void do_swap(struct apple_dcp *dcp, void *data, void *cookie)
@@ -1169,6 +1172,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 		do_swap(dcp, NULL, NULL);
 
 }
+EXPORT_SYMBOL_GPL(dcp_flush);
 
 bool dcp_is_initialized(struct platform_device *pdev)
 {
@@ -1176,6 +1180,7 @@ bool dcp_is_initialized(struct platform_device *pdev)
 
 	return dcp->active;
 }
+EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
@@ -1265,6 +1270,7 @@ void dcp_link(struct platform_device *pdev, struct apple_crtc *crtc,
 	/* Dimensions might already be parsed */
 	dcp_set_dimensions(dcp);
 }
+EXPORT_SYMBOL_GPL(dcp_link);
 
 static struct platform_device *dcp_get_dev(struct device *dev, const char *name)
 {
