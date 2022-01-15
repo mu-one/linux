@@ -14,6 +14,7 @@
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_probe_helper.h>
+#include <drm/drm_vblank.h>
 
 #include "dcpep.h"
 #include "dcp.h"
@@ -355,9 +356,28 @@ static u32 dcpep_cb_zero(struct apple_dcp *dcp)
 	return 0;
 }
 
+/* HACK: moved here to avoid circular dependency between apple_drv and dcp */
+void dcp_drm_crtc_vblank(struct apple_crtc *crtc)
+{
+	unsigned long flags;
+
+	if (crtc->vsync_disabled)
+		return;
+
+	drm_crtc_handle_vblank(&crtc->base);
+
+	spin_lock_irqsave(&crtc->base.dev->event_lock, flags);
+	if (crtc->event) {
+		drm_crtc_send_vblank_event(&crtc->base, crtc->event);
+		drm_crtc_vblank_put(&crtc->base);
+		crtc->event = NULL;
+	}
+	spin_unlock_irqrestore(&crtc->base.dev->event_lock, flags);
+}
+
 static void dcpep_cb_swap_complete(struct apple_dcp *dcp)
 {
-	apple_crtc_vblank(dcp->crtc);
+	dcp_drm_crtc_vblank(dcp->crtc);
 }
 
 static struct dcp_get_uint_prop_resp
@@ -734,7 +754,7 @@ void dcp_delayed_vblank(struct work_struct *work)
 
 	dcp = container_of(work, struct apple_dcp, vblank_wq);
 	mdelay(5);
-	apple_crtc_vblank(dcp->crtc);
+	dcp_drm_crtc_vblank(dcp->crtc);
 }
 
 
@@ -950,7 +970,7 @@ static void dcp_swapped(struct apple_dcp *dcp, void *data, void *cookie)
 
 	if (resp->ret) {
 		dev_err(dcp->dev, "swap failed! status %u\n", resp->ret);
-		apple_crtc_vblank(dcp->crtc);
+		dcp_drm_crtc_vblank(dcp->crtc);
 	}
 }
 
