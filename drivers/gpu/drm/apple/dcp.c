@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/of_device.h>
+#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/iommu.h>
 #include <linux/align.h>
@@ -98,6 +99,9 @@ struct apple_dcp {
 
 	/* Attributes of the connected display */
 	int width_mm, height_mm;
+
+	/* Workqueue for sending vblank events when a dcp swap is not possible */
+	struct work_struct vblank_wq;
 };
 
 /*
@@ -719,6 +723,21 @@ static void dcpep_cb_hotplug(struct apple_dcp *dcp, u64 *connected)
 	}
 }
 
+/*
+ * Helper to send a DRM vblank event. We do not know how call swap_submit_dcp
+ * without surfaces. To avoid timeouts in drm_atomic_helper_wait_for_vblanks
+ * send a vblank event via a workqueue.
+ */
+void dcp_delayed_vblank(struct work_struct *work)
+{
+	struct apple_dcp *dcp;
+
+	dcp = container_of(work, struct apple_dcp, vblank_wq);
+	mdelay(5);
+	apple_crtc_vblank(dcp->crtc);
+}
+
+
 #define DCPEP_MAX_CB (1000)
 
 /*
@@ -1033,12 +1052,16 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 	struct drm_crtc_state *crtc_state;
 	struct dcp_swap_submit_req *req = &dcp->swap;
 	int l;
+	int has_surface = 0;
 
 	crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
 
 	if (WARN(dcp_channel_busy(&dcp->ch_cmd), "unexpected busy channel") ||
 	    WARN(!dcp->connector->connected, "can't flush if disconnected")) {
-		apple_crtc_vblank(dcp->crtc);
+		/* HACK: issue a delayed vblank event to avoid timeouts in
+		 * drm_atomic_helper_wait_for_vblanks().
+		 */
+		schedule_work(&dcp->vblank_wq);
 		return;
 	}
 
@@ -1062,6 +1085,7 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 			continue;
 		}
 		req->surf_null[l] = false;
+		has_surface = 1;
 
 		// XXX: awful hack! race condition between a framebuffer unbind
 		// getting swapped out and GEM unreferencing a framebuffer. If
@@ -1120,6 +1144,14 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_state *state)
 		dcp->valid_mode = true;
 
 		dcp_set_display_device(dcp, false, &handle, dcp_modeset, NULL);
+	}
+	else if (!has_surface) {
+		dev_warn(dcp->dev, "can't flush without surfaces, vsync:%d", dcp->crtc->vsync_disabled);
+		/* HACK: issue a delayed vblank event to avoid timeouts in
+		 * drm_atomic_helper_wait_for_vblanks(). It's currently unkown
+		 * if and how DCP supports swaps without attached surfaces.
+		 */
+		schedule_work(&dcp->vblank_wq);
 	} else
 		do_swap(dcp, NULL, NULL);
 }
@@ -1328,6 +1360,8 @@ static int dcp_platform_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to find display registers\n");
 		return ret;
 	}
+
+	INIT_WORK(&dcp->vblank_wq, dcp_delayed_vblank);
 
 	dcp->rtk = devm_apple_rtkit_init(dev, dcp, "mbox", 0, &rtkit_ops);
 	if (IS_ERR(dcp->rtk))
