@@ -304,7 +304,7 @@ static u32 calculate_clock(struct dimension *horiz, struct dimension *vert)
 
 static int parse_mode(struct dcp_parse_ctx *handle,
 		      struct dcp_display_mode *modes,
-		      unsigned int *count, int width_mm, int height_mm)
+		      unsigned int *count, s64 *score, int width_mm, int height_mm)
 {
 	int ret = 0;
 	struct iterator it;
@@ -331,6 +331,8 @@ static int parse_mode(struct dcp_parse_ctx *handle,
 			ret = parse_int(it.handle, &id);
 		else if (!strcmp(key, "IsVirtual"))
 			ret = parse_bool(it.handle, &is_virtual);
+		else if (!strcmp(key, "Score"))
+			ret = parse_int(it.handle, score);
 		else
 			skip(it.handle);
 
@@ -382,6 +384,8 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 	struct iterator it;
 	int ret;
 	struct dcp_display_mode *modes;
+	s64 best_id = -1;
+	s64 score, best_score = -1;
 
 	ret = iterator_begin(handle, &it, false);
 
@@ -396,13 +400,21 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 		return ERR_PTR(-ENOMEM);
 
 	for (; it.idx < it.len; ++it.idx) {
-		ret = parse_mode(it.handle, modes, count, width_mm, height_mm);
+		ret = parse_mode(it.handle, modes, count, &score, width_mm, height_mm);
 
 		if (ret) {
 			kfree(modes);
 			return ERR_PTR(ret);
 		}
+
+		if (score > best_score) {
+			best_score = score;
+			best_id = *count - 1;
+		}
 	}
+
+	if (best_id >= 0)
+		modes[best_id].mode.type |= DRM_MODE_TYPE_PREFERRED;
 
 	return modes;
 }
