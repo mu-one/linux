@@ -643,17 +643,9 @@ static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 	dcp_ack(dcp, DCP_CONTEXT_CB);
 }
 
-static void boot_6(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	struct dcp_set_power_state_req req = {
-		.unklong = 1,
-	};
-	dcp_set_power_state(dcp, false, &req, boot_done, NULL);
-}
-
 static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_set_display_refresh_properties(dcp, false, boot_6, NULL);
+	dcp_set_display_refresh_properties(dcp, false, boot_done, NULL);
 }
 
 static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
