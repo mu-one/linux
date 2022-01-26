@@ -303,8 +303,8 @@ static u32 calculate_clock(struct dimension *horiz, struct dimension *vert)
 }
 
 static int parse_mode(struct dcp_parse_ctx *handle,
-		      struct dcp_display_mode *modes,
-		      unsigned int *count, s64 *score, int width_mm, int height_mm)
+		      struct dcp_display_mode *out,
+		      s64 *score, int width_mm, int height_mm)
 {
 	int ret = 0;
 	struct iterator it;
@@ -312,8 +312,6 @@ static int parse_mode(struct dcp_parse_ctx *handle,
 	s64 id = -1;
 	s64 best_color_mode = -1;
 	bool is_virtual = false;
-
-	struct dcp_display_mode *out = &modes[*count];
 	struct drm_display_mode *mode = &out->mode;
 
 	dcp_parse_foreach_in_dict(handle, it) {
@@ -343,11 +341,12 @@ static int parse_mode(struct dcp_parse_ctx *handle,
 	/*
 	 * We need to skip virtual modes. In some cases, virtual modes are "too
 	 * big" for the monitor and can cause breakage. It is unclear why the
-	 * DCP reports these modes at all.
+	 * DCP reports these modes at all. Treat as a recoverable error.
 	 */
 	if (is_virtual)
-		return 0;
+		return -EINVAL;
 
+	/* From here we must succeed. Start filling out the mode. */
 	*mode = (struct drm_display_mode) {
 		.type = DRM_MODE_TYPE_DRIVER,
 		.clock = calculate_clock(&horiz, &vert),
@@ -371,7 +370,6 @@ static int parse_mode(struct dcp_parse_ctx *handle,
 
 	out->timing_mode_id = id;
 	out->color_mode_id = best_color_mode;
-	(*count)++;
 
 	return 0;
 }
@@ -383,8 +381,8 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 {
 	struct iterator it;
 	int ret;
-	struct dcp_display_mode *modes;
-	s64 best_id = -1;
+	struct dcp_display_mode *mode, *modes;
+	struct dcp_display_mode	*best_mode = NULL;
 	s64 score, best_score = -1;
 
 	ret = iterator_begin(handle, &it, false);
@@ -400,21 +398,24 @@ struct dcp_display_mode *enumerate_modes(struct dcp_parse_ctx *handle,
 		return ERR_PTR(-ENOMEM);
 
 	for (; it.idx < it.len; ++it.idx) {
-		ret = parse_mode(it.handle, modes, count, &score, width_mm, height_mm);
+		mode = &modes[*count];
+		ret = parse_mode(it.handle, mode, &score, width_mm, height_mm);
 
-		if (ret) {
-			kfree(modes);
-			return ERR_PTR(ret);
-		}
+		/* Errors for a single mode are recoverable -- just skip it. */
+		if (ret)
+			continue;
+
+		/* Process a successful mode */
+		(*count)++;
 
 		if (score > best_score) {
 			best_score = score;
-			best_id = *count - 1;
+			best_mode = mode;
 		}
 	}
 
-	if (best_id >= 0)
-		modes[best_id].mode.type |= DRM_MODE_TYPE_PREFERRED;
+	if (best_mode != NULL)
+		best_mode->mode.type |= DRM_MODE_TYPE_PREFERRED;
 
 	return modes;
 }
