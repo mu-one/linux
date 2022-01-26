@@ -192,7 +192,6 @@ static u8 dcp_pop_depth(u8 *depth)
 const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
 	DCP_METHOD(dcpep_late_init_signal, "A000"),
 	DCP_METHOD(dcpep_setup_video_limits, "A029"),
-	DCP_METHOD(dcpep_update_notify_clients_dcp, "A034"),
 	DCP_METHOD(dcpep_set_create_dfb, "A357"),
 	DCP_METHOD(dcpep_start_signal, "A401"),
 	DCP_METHOD(dcpep_swap_start, "A407"),
@@ -200,7 +199,6 @@ const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
 	DCP_METHOD(dcpep_set_display_device, "A410"),
 	DCP_METHOD(dcpep_set_digital_out_mode, "A412"),
 	DCP_METHOD(dcpep_create_default_fb, "A443"),
-	DCP_METHOD(dcpep_first_client_open, "A454"),
 	DCP_METHOD(dcpep_set_display_refresh_properties, "A460"),
 	DCP_METHOD(dcpep_flush_supports_power, "A463"),
 	DCP_METHOD(dcpep_set_power_state, "A468"),
@@ -302,10 +300,6 @@ DCP_THUNK_OUT(dcp_create_default_fb, dcpep_create_default_fb, u32);
 DCP_THUNK_OUT(dcp_start_signal, dcpep_start_signal, u32);
 DCP_THUNK_VOID(dcp_setup_video_limits, dcpep_setup_video_limits);
 DCP_THUNK_VOID(dcp_set_create_dfb, dcpep_set_create_dfb);
-DCP_THUNK_VOID(dcp_first_client_open, dcpep_first_client_open);
-
-DCP_THUNK_IN(dcp_update_notify_clients_dcp, dcpep_update_notify_clients_dcp,
-		struct dcp_update_notify_clients_dcp);
 
 /* Parse a callback tag "D123" into the ID 123. Returns -EINVAL on failure. */
 static int dcp_parse_tag(char tag[4])
@@ -649,9 +643,17 @@ static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 	dcp_ack(dcp, DCP_CONTEXT_CB);
 }
 
+static void boot_6(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	struct dcp_set_power_state_req req = {
+		.unklong = 1,
+	};
+	dcp_set_power_state(dcp, false, &req, boot_done, NULL);
+}
+
 static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_set_display_refresh_properties(dcp, false, boot_done, NULL);
+	dcp_set_display_refresh_properties(dcp, false, boot_6, NULL);
 }
 
 static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
@@ -1180,50 +1182,9 @@ bool dcp_is_initialized(struct platform_device *pdev)
 }
 EXPORT_SYMBOL_GPL(dcp_is_initialized);
 
-static void init_done(struct apple_dcp *dcp, void *out, void *cookie)
-{
-}
-
-static void init_3(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	struct dcp_set_power_state_req req = {
-		.unklong = 1,
-	};
-	dcp_set_power_state(dcp, false, &req, init_done, NULL);
-}
-
-static void init_2(struct apple_dcp *dcp, void *out, void *cookie)
-{
-	dcp_first_client_open(dcp, false, init_3, NULL);
-}
-
-static void init_1(struct apple_dcp *dcp, void *out, void *cookie)
-{
-       struct dcp_update_notify_clients_dcp notify = {
-               .client_0 = 0,
-               .client_1 = 0,
-               .client_2 = 0,
-               .client_3 = 0,
-               .client_4 = 0,
-               .client_5 = 0,
-               .client_6 = 1,
-               .client_7 = 1,
-               .client_8 = 1,
-               .client_9 = 0,
-               .client_a = 1,
-               .client_b = 1,
-               .client_c = 1,
-       };
-
-       dcp_update_notify_clients_dcp(dcp, false, &notify, init_2, NULL);
-}
-
 static void dcp_started(struct apple_dcp *dcp, void *data, void *cookie)
 {
 	dev_info(dcp->dev, "DCP booted\n");
-
-	init_1(dcp, data,cookie);
-
 	dcp->active = true;
 }
 
