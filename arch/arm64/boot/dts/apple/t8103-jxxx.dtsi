@@ -32,6 +32,103 @@
 		};
 	};
 
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		 /* /vram */
+		vram: vram@0 {
+			reg = <0 0 0 0>; /* To be filled by loader */
+			no-map;
+			status = "disabled";
+		};
+
+		vram_dcp: vram_dcp@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&vram>;
+			status = "disabled";
+		};
+
+		vram_disp0: vram_disp0@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&vram>;
+			status = "disabled";
+		};
+
+		 /* /chosen/carveout-memory-map/region-id-50 */
+		dcprodata: dcprodata@0 {
+			reg = <0 0 0 0>; /* To be filled by loader */
+			no-map;
+			status = "disabled";
+		};
+
+		dcprodataio: dcprodataio@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&dcprodata>;
+			status = "disabled";
+		};
+
+		 /* /chosen/carveout-memory-map/region-id-57 */
+		dcpheap: dcpheap@0 {
+			reg = <0 0 0 0>; /* To be filled by loader */
+			no-map;
+			status = "disabled";
+		};
+
+		dcpheapio: dcpheapio@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&dcpheap>;
+			status = "disabled";
+		};
+
+		 /* /chosen/carveout-memory-map/region-id-57 */
+		region94: region94@0 {
+			reg = <0 0 0 0>; /* To be filled by loader */
+			no-map;
+			status = "disabled";
+		};
+
+		region94_dcp: region94_dcp@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&region94>;
+			status = "disabled";
+		};
+
+		region94_disp0_0: region94_disp0_0@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&region94>;
+			status = "disabled";
+		};
+
+		 /* /chosen/carveout-memory-map/region-id-57 */
+		region95: region95@0 {
+			reg = <0 0 0 0>; /* To be filled by loader */
+			no-map;
+			status = "disabled";
+		};
+
+		region95_dcp: region95_dcp@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&region95>;
+			status = "disabled";
+		};
+
+		region95_disp0_4: region95_disp0_4@0 {
+			compatible = "iommu-mapping";
+			reg = <0 0 0 0>; /* To be filled by loader */
+			memory-region = <&region95>;
+			status = "disabled";
+		};
+	};
+
 	memory@800000000 {
 		device_type = "memory";
 		reg = <0x8 0 0x2 0>; /* To be filled by loader */

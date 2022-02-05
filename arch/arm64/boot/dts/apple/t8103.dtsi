@@ -321,6 +321,7 @@
 			#iommu-cells = <1>;
 			interrupt-parent = <&aic>;
 			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
+			mapped-devices = <&disp0>, <&piodma>;
 		};
 
 		dcp_dart: iommu@23130c000 {
@@ -329,6 +330,7 @@
 			#iommu-cells = <1>;
 			interrupt-parent = <&aic>;
 			interrupts = <AIC_IRQ 445 IRQ_TYPE_LEVEL_HIGH>;
+			mapped-devices = <&dcp>;
 		};
 
 		dcp_mbox: mbox@231c08000 {
@@ -364,10 +366,12 @@
 				<0x2 0x3bc3c000 0x0 0x1000>;
 			power-domains = <&ps_disp0_cpu0>;
 			apple,asc-dram-mask = <0xf 0x00000000>;
+			memory-region = <&dcprodataio>, <&dcpheapio>, <&vram_dcp>, <&region94_dcp>, <&region95_dcp>;
 
 			piodma: piodma {
 				compatible = "apple,t8103-dcp-piodma";
 				iommus = <&disp0_dart 4>;
+				memory-region = <&region95_disp0_4>;
 			};
 		};
 
@@ -375,6 +379,7 @@
 			compatible = "apple,display-subsystem";
 			iommus = <&disp0_dart 0>;
 			apple,coprocessors = <&dcp>;
+			memory-region = <&vram_disp0>, <&region94_disp0_0>;
 		};
 
 		i2c0: i2c@235010000 {
