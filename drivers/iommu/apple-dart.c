@@ -184,6 +184,12 @@ struct apple_dart_hw {
 	int ttbr_count;
 };
 
+struct apple_dart_reserved_regions {
+	unsigned long iova;
+	phys_addr_t paddr;
+	size_t size;
+};
+
 /*
  * Private structure associated with each DART device.
  *
@@ -220,11 +226,16 @@ struct apple_dart {
 	u32 force_bypass : 1;
 	u32 locked : 1;
 
+	u32 reset_mask;
+
 	struct iommu_group *sid2group[DART_MAX_STREAMS];
 	struct iommu_device iommu;
 
 	u32 save_tcr[DART_MAX_STREAMS];
 	u32 save_ttbr[DART_MAX_STREAMS][DART_MAX_TTBR];
+
+	struct apple_dart_reserved_regions *resv_regions[DART_MAX_STREAMS];
+	int num_resv_regions[DART_MAX_STREAMS];
 };
 
 /*
@@ -462,6 +473,7 @@ static int apple_dart_hw_reset(struct apple_dart *dart)
 	stream_map.dart = dart;
 	bitmap_zero(stream_map.sidmap, DART_MAX_STREAMS);
 	bitmap_set(stream_map.sidmap, 0, dart->num_streams);
+
 	apple_dart_hw_disable_dma(&stream_map);
 	apple_dart_hw_clear_all_ttbrs(&stream_map);
 
@@ -549,21 +561,71 @@ static size_t apple_dart_unmap_pages(struct iommu_domain *domain,
 	return ops->unmap_pages(ops, iova, pgsize, pgcount, gather);
 }
 
+static int
+apple_dart_setup_reserved_regions(struct apple_dart_domain *domain,
+				  struct apple_dart_stream_map *stream_map,
+				  struct apple_dart_master_cfg *cfg)
+{
+	struct apple_dart *dart = stream_map->dart;
+	int sid, j;
+
+	for_each_set_bit(sid, &stream_map->sidmap, DART_MAX_STREAMS) {
+		for (j = 0; j < dart->num_resv_regions[sid]; j++) {
+			int ret;
+			struct apple_dart_reserved_regions *region = &dart->resv_regions[sid][j];
+			size_t pgsize = stream_map->dart->pgsize;
+			unsigned long iova = region->iova;
+			phys_addr_t paddr = region->paddr;
+			size_t pgcount = region->size / pgsize;
+			int prot = IOMMU_READ | IOMMU_WRITE | IOMMU_NOEXEC | IOMMU_CACHE;
+
+			while (pgcount) {
+				size_t mapped = 0;
+
+				dev_dbg(stream_map->dart->dev, "map %zu pages pa: 0x%llx iova: 0x%lx\n",
+					pgcount, paddr, iova);
+
+				ret = apple_dart_map_pages(&domain->domain, iova,
+							paddr, pgsize, pgcount, prot,
+							GFP_KERNEL, &mapped);
+				if (ret)
+					return ret;
+
+				iova += mapped;
+				paddr += mapped;
+				if (pgcount >= (mapped / pgsize))
+					pgcount -= mapped / pgsize;
+				else
+					pgcount = 0;
+			}
+		}
+	}
+
+	return 0;
+}
+
 static void
 apple_dart_setup_translation(struct apple_dart_domain *domain,
-			     struct apple_dart_stream_map *stream_map)
+			     struct apple_dart_stream_map *stream_map,
+			     struct apple_dart_master_cfg *cfg)
 {
 	int i;
 	struct io_pgtable_cfg *pgtbl_cfg =
 		&io_pgtable_ops_to_pgtable(domain->pgtbl_ops)->cfg;
 
-	for (i = 0; i < pgtbl_cfg->apple_dart_cfg.n_ttbrs; ++i)
-		apple_dart_hw_set_ttbr(stream_map, i,
-				       pgtbl_cfg->apple_dart_cfg.ttbr[i]);
-	for (; i < stream_map->dart->hw->ttbr_count; ++i)
-		apple_dart_hw_clear_ttbr(stream_map, i);
+	/* map reserved regions for locked and unlocked DARTs */
+	apple_dart_setup_reserved_regions(domain, stream_map, cfg);
 
-	apple_dart_hw_enable_translation(stream_map);
+	/* Locked DARTs are set up by the bootloader. */
+	if (!stream_map->dart->locked) {
+		for (i = 0; i < pgtbl_cfg->apple_dart_cfg.n_ttbrs; ++i)
+			apple_dart_hw_set_ttbr(stream_map, i,
+					pgtbl_cfg->apple_dart_cfg.ttbr[i]);
+		for (; i < stream_map->dart->hw->ttbr_count; ++i)
+			apple_dart_hw_clear_ttbr(stream_map, i);
+
+		apple_dart_hw_enable_translation(stream_map);
+	}
 	stream_map->dart->hw->invalidate_tlb(stream_map);
 }
 
@@ -706,7 +768,8 @@ static int apple_dart_attach_dev(struct iommu_domain *domain,
 			return ret;
 
 		for_each_stream_map(i, cfg, stream_map)
-			apple_dart_setup_translation(dart_domain, stream_map);
+			apple_dart_setup_translation(dart_domain, stream_map, cfg);
+
 		break;
 	case IOMMU_DOMAIN_BLOCKED:
 		for_each_stream_map(i, cfg, stream_map)
@@ -946,6 +1009,9 @@ static int apple_dart_def_domain_type(struct device *dev)
 static void apple_dart_get_resv_regions(struct device *dev,
 					struct list_head *head)
 {
+	struct apple_dart_master_cfg *cfg = dev_iommu_priv_get(dev);
+	int i;
+
 	if (IS_ENABLED(CONFIG_PCIE_APPLE) && dev_is_pci(dev)) {
 		struct iommu_resv_region *region;
 		int prot = IOMMU_WRITE | IOMMU_NOEXEC | IOMMU_MMIO;
@@ -957,6 +1023,33 @@ static void apple_dart_get_resv_regions(struct device *dev,
 			return;
 
 		list_add_tail(&region->list, head);
+	}
+
+	for (i = 0; i < MAX_DARTS_PER_DEVICE; i++) {
+		struct apple_dart *dart = cfg->stream_maps[i].dart;
+		int sid, j;
+		if (!dart)
+			continue;
+
+		for_each_set_bit(sid, &cfg->stream_maps[i].sidmap, DART_MAX_STREAMS) {
+
+			for (j = 0; j < dart->num_resv_regions[sid]; j++) {
+				struct iommu_resv_region *region;
+				phys_addr_t start = dart->resv_regions[sid][j].iova;
+				size_t size = dart->resv_regions[sid][j].size;
+				int prot = IOMMU_READ | IOMMU_WRITE | IOMMU_NOEXEC;
+
+				if (size == 0)
+					continue;
+
+				region = iommu_alloc_resv_region(start, size, prot,
+								IOMMU_RESV_RESERVED);
+				if (!region)
+					continue;
+
+				list_add_tail(&region->list, head);
+			}
+		}
 	}
 
 	iommu_dma_get_resv_regions(dev, head);
@@ -1084,6 +1177,111 @@ static int apple_dart_set_bus_ops(const struct iommu_ops *ops)
 	return 0;
 }
 
+static const struct of_device_id apple_dart_of_match[];
+
+static int apple_dart_of_reserved_regions(struct apple_dart *dart,
+					  struct device_node *node,
+					  u32 sid)
+{
+	struct device_node *pa_node, *iova_node;
+	struct resource res_pa, res_iova;
+	struct device *dev = dart->dev;
+	int i, ret, count, idx = 0;
+
+	count = of_property_count_elems_of_size(node, "memory-region",
+						sizeof(phandle));
+	if (count <= 0)
+		return 0;
+
+	dart->resv_regions[sid] = kcalloc(count, sizeof(*dart->resv_regions[0]),
+					 GFP_KERNEL);
+	if (!dart->resv_regions[sid])
+		return -ENOMEM;
+
+	dart->num_resv_regions[sid] = count;
+
+	for (i = 0; i < count; i++) {
+		iova_node = of_parse_phandle(node, "memory-region", i);
+		if (!of_device_is_compatible(iova_node, "iommu-mapping") ||
+		    !of_device_is_available(iova_node))
+			continue;
+
+		ret = of_address_to_resource(iova_node, 0, &res_iova);
+		if (ret) {
+			dev_err(dev, "of_address_to_resource IOVA failed\n");
+			of_node_put(iova_node);
+			continue;
+		}
+
+		pa_node = of_parse_phandle(iova_node, "memory-region", 0);
+		of_node_put(iova_node);
+		if (!of_device_is_available(iova_node))
+			continue;
+
+		ret = of_address_to_resource(pa_node, 0, &res_pa);
+		of_node_put(pa_node);
+		if (ret) {
+			dev_err(dev, "of_address_to_resource PA failed\n");
+			continue;
+		}
+		dev_info(dev, "reserved region: IOVA %pR PA %pR\n", &res_iova,
+			 &res_pa);
+
+		dart->resv_regions[sid][idx].iova = res_iova.start;
+		dart->resv_regions[sid][idx].paddr = res_pa.start;
+		dart->resv_regions[sid][idx].size = res_iova.end - res_iova.start +1;
+		idx += 1;
+	}
+	dart->num_resv_regions[sid] = idx;
+
+	return 0;
+}
+
+static int apple_dart_of_mapped_devices(struct apple_dart *dart)
+{
+	struct device *dev = dart->dev;
+        int i, num_devs;
+
+	num_devs = of_property_count_elems_of_size(dev->of_node, "mapped-devices",
+						   sizeof(phandle));
+
+	if (num_devs <= 0)
+		return 0;
+
+	for (i = 0; i < num_devs; i++) {
+		struct device_node *mapped_node;
+		struct of_phandle_args iommu_spec;
+		int idx = 0;
+
+		mapped_node = of_parse_phandle(dev->of_node, "mapped-devices", i);
+
+		while (!of_parse_phandle_with_args(mapped_node, "iommus",
+						"#iommu-cells",
+						idx, &iommu_spec)) {
+			u32 stream_id;
+
+			idx++;
+
+			if (dev->of_node->phandle != iommu_spec.np->phandle ||
+				iommu_spec.args[0] >= DART_MAX_STREAMS)
+			{
+				of_node_put(iommu_spec.np);
+				continue;
+			}
+			of_node_put(iommu_spec.np);
+
+			stream_id = iommu_spec.args[0];
+
+			apple_dart_of_reserved_regions(dart, mapped_node, stream_id);
+
+			if (dart->num_resv_regions[stream_id])
+				dart->reset_mask |= BIT(stream_id);
+		}
+	}
+
+	return 0;
+}
+
 static bool apple_dart_is_locked(struct apple_dart *dart)
 {
 	return !!(readl(dart->regs + DART_CONFIG) & DART_CONFIG_LOCK);
@@ -1155,6 +1353,8 @@ static int apple_dart_probe(struct platform_device *pdev)
 
 	dart->force_bypass = dart->pgsize > PAGE_SIZE;
 	dart->locked = apple_dart_is_locked(dart);
+
+	apple_dart_of_mapped_devices(dart);
 
 	if (!dart->locked)
 		ret = apple_dart_hw_reset(dart);
