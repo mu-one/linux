@@ -241,6 +241,7 @@ enum dcpep_method {
 	dcpep_set_power_state,
 	dcpep_first_client_open,
 	dcpep_update_notify_clients_dcp,
+	dcpep_set_matrix,
 	dcpep_num_methods
 };
 
@@ -400,6 +401,11 @@ struct dcp_update_notify_clients_dcp {
 	u32 client_a;
 	u32 client_b;
 	u32 client_c;
+} __packed;
+
+struct dcp_set_matrix_req {
+	u32 unk;
+	u64 matrix[3][3];
 } __packed;
 
 #endif

@@ -213,6 +213,7 @@ const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
 	DCP_METHOD("A408", dcpep_swap_submit),
 	DCP_METHOD("A410", dcpep_set_display_device),
 	DCP_METHOD("A412", dcpep_set_digital_out_mode),
+	DCP_METHOD("A422", dcpep_set_matrix),
 	DCP_METHOD("A443", dcpep_create_default_fb),
 	DCP_METHOD("A454", dcpep_first_client_open),
 	DCP_METHOD("A460", dcpep_set_display_refresh_properties),
@@ -306,6 +307,9 @@ DCP_THUNK_INOUT(dcp_set_digital_out_mode, dcpep_set_digital_out_mode,
 		struct dcp_set_digital_out_mode_req, u32);
 
 DCP_THUNK_INOUT(dcp_set_display_device, dcpep_set_display_device, u32, u32);
+
+DCP_THUNK_INOUT(dcp_set_matrix, dcpep_set_matrix, struct dcp_set_matrix_req,
+		u32);
 
 DCP_THUNK_OUT(dcp_set_display_refresh_properties,
 	      dcpep_set_display_refresh_properties, u32);
@@ -664,9 +668,24 @@ static void boot_done(struct apple_dcp *dcp, void *out, void *cookie)
 	dcp_ack(dcp, DCP_CONTEXT_CB);
 }
 
+static void boot_6(struct apple_dcp *dcp, void *out, void *cookie)
+{
+	struct dcp_set_matrix_req matrix = {
+		.unk = 9,
+		.matrix = {
+			/* CIE 1931 coefficients: [0.2126, 0.7152, 0.0722] */
+			{ 0x366cf41f, 0xb71758e2, 0x127bb2ff },
+			{ 0x366cf41f, 0xb71758e2, 0x127bb2ff },
+			{ 0x366cf41f, 0xb71758e2, 0x127bb2ff },
+		}
+	};
+
+	dcp_set_matrix(dcp, false, &matrix, boot_done, NULL);
+}
+
 static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
 {
-	dcp_set_display_refresh_properties(dcp, false, boot_done, NULL);
+	dcp_set_display_refresh_properties(dcp, false, boot_6, NULL);
 }
 
 static void boot_4(struct apple_dcp *dcp, void *out, void *cookie)
